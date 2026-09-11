@@ -405,7 +405,7 @@ export const Layout: React.FC<LayoutProps> = ({
                         No notifications yet
                       </div>
                     ) : (
-                      notifications.map((notif) => {
+                      notifications.map((notif, idx) => {
                         const isRead =
                           notif.recipient === null
                             ? notif.readBy.includes(user?._id || "")
@@ -413,7 +413,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
                         return (
                           <div
-                            key={notif._id || Math.random().toString()}
+                            key={notif._id || `notif-${idx}`}
                             onClick={() => {
                               if (notif.type === "task_assigned") {
                                 setCurrentTab("tasks");

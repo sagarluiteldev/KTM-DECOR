@@ -1,9 +1,10 @@
 import { Metadata } from "next";
-import { PRODUCTS } from "@/data/shop-data";
+import { fetchProductById, fetchAllProducts } from "@/lib/api";
 import ProductDetailClient from "@/components/ProductDetailClient";
 
 export async function generateStaticParams() {
-  return PRODUCTS.map((product) => ({
+  const products = await fetchAllProducts();
+  return products.map((product) => ({
     id: product.id,
   }));
 }
@@ -14,8 +15,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const resolvedParams = await params;
-  const product = PRODUCTS.find((p) => p.id === resolvedParams.id);
-  
+  const product = await fetchProductById(resolvedParams.id);
+
   if (!product) {
     return {
       title: "Product Not Found | KTM DECOR",
@@ -23,8 +24,11 @@ export async function generateMetadata({
   }
 
   const title = `${product.name} Price in Nepal (2026) | Custom Signage — KTM DECOR`;
-  const description = `Buy ${product.name} in Nepal. ${product.description.slice(0, 110)}... Direct Balkot workshop price from NPR ${product.price.toLocaleString()} with 1-year warranty & fast delivery.`;
+  const description = `Buy ${product.name} in Nepal. ${product.description.slice(0, 110)}... Direct Balkot workshop price from NPR ${Number(product.price).toLocaleString()} with 1-year warranty & fast delivery.`;
   const canonicalUrl = `https://www.decorktm.com/shop/${product.id}`;
+  const imageUrl = product.image.startsWith("http")
+    ? product.image
+    : `https://www.decorktm.com${product.image}`;
 
   return {
     title,
@@ -35,7 +39,7 @@ export async function generateMetadata({
       `${product.category.toLowerCase()} price nepal`,
       `${product.category.toLowerCase()} kathmandu`,
       "custom signage nepal",
-      "buy neon signs online ktm"
+      "buy neon signs online ktm",
     ],
     alternates: {
       canonical: canonicalUrl,
@@ -48,7 +52,7 @@ export async function generateMetadata({
       siteName: "KTM DECOR",
       images: [
         {
-          url: product.image.startsWith("http") ? product.image : `https://www.decorktm.com${product.image}`,
+          url: imageUrl,
           width: 800,
           height: 800,
           alt: product.name,
@@ -59,7 +63,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: [product.image.startsWith("http") ? product.image : `https://www.decorktm.com${product.image}`],
+      images: [imageUrl],
     },
   };
 }
@@ -70,7 +74,7 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const resolvedParams = await params;
-  const product = PRODUCTS.find((p) => p.id === resolvedParams.id);
+  const product = await fetchProductById(resolvedParams.id);
 
   if (!product) {
     return <ProductDetailClient />;
@@ -80,104 +84,113 @@ export default async function Page({
     ? product.image
     : `https://www.decorktm.com${product.image}`;
 
+  const availability =
+    (product.stockStatus as string) === "Out of Stock"
+      ? "https://schema.org/OutOfStock"
+      : "https://schema.org/InStock";
+
   const productSchema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "name": product.name,
-    "image": [productImageUrl],
-    "description": product.description,
-    "sku": `KTM-PROD-${product.id}`,
-    "brand": {
+    name: product.name,
+    image: [productImageUrl],
+    description: product.description,
+    sku: `KTM-PROD-${product.id}`,
+    brand: {
       "@type": "Brand",
-      "name": "KTM DECOR"
+      name: "KTM DECOR",
     },
-    "offers": {
+    offers: {
       "@type": "Offer",
-      "url": `https://www.decorktm.com/shop/${product.id}`,
-      "priceCurrency": "NPR",
-      "price": product.price,
-      "priceValidUntil": "2026-12-31",
-      "itemCondition": "https://schema.org/NewCondition",
-      "availability": "https://schema.org/InStock",
-      "seller": {
+      url: `https://www.decorktm.com/shop/${product.id}`,
+      priceCurrency: "NPR",
+      price: Number(product.price),
+      priceValidUntil: "2026-12-31",
+      itemCondition: "https://schema.org/NewCondition",
+      availability,
+      seller: {
         "@type": "Organization",
-        "name": "KTM DECOR",
-        "url": "https://www.decorktm.com"
+        name: "KTM DECOR",
+        url: "https://www.decorktm.com",
       },
-      "hasMerchantReturnPolicy": {
+      hasMerchantReturnPolicy: {
         "@type": "MerchantReturnPolicy",
-        "applicableCountry": "NP",
-        "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-        "merchantReturnDays": 7,
-        "returnMethod": "https://schema.org/ReturnByMail",
-        "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
-        "url": "https://www.decorktm.com/return-policy"
+        applicableCountry: "NP",
+        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+        merchantReturnDays: 7,
+        returnMethod: "https://schema.org/ReturnByMail",
+        returnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+        url: "https://www.decorktm.com/return-policy",
       },
-      "shippingDetails": {
+      shippingDetails: {
         "@type": "OfferShippingDetails",
-        "shippingRate": {
+        shippingRate: {
           "@type": "MonetaryAmount",
-          "value": "0",
-          "currency": "NPR"
+          value: "0",
+          currency: "NPR",
         },
-        "shippingDestination": {
+        shippingDestination: {
           "@type": "DefinedRegion",
-          "addressCountry": "NP"
+          addressCountry: "NP",
         },
-        "deliveryTime": {
+        deliveryTime: {
           "@type": "ShippingDeliveryTime",
-          "transitTime": {
+          transitTime: {
             "@type": "QuantitativeValue",
-            "minValue": 1,
-            "maxValue": 4,
-            "unitCode": "DAY"
-          }
-        }
-      }
+            minValue: 1,
+            maxValue: 4,
+            unitCode: "DAY",
+          },
+        },
+      },
     },
-    "aggregateRating": {
+    aggregateRating: {
       "@type": "AggregateRating",
-      "ratingValue": product.rating || 4.9,
-      "reviewCount": product.reviewsCount || 34,
-      "bestRating": "5",
-      "worstRating": "1"
-    }
+      ratingValue: product.rating || 4.9,
+      reviewCount: product.reviewsCount || 34,
+      bestRating: "5",
+      worstRating: "1",
+    },
   };
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    "itemListElement": [
+    itemListElement: [
       {
         "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://www.decorktm.com"
+        position: 1,
+        name: "Home",
+        item: "https://www.decorktm.com",
       },
       {
         "@type": "ListItem",
-        "position": 2,
-        "name": "Shop",
-        "item": "https://www.decorktm.com/shop"
+        position: 2,
+        name: "Shop",
+        item: "https://www.decorktm.com/shop",
       },
       {
         "@type": "ListItem",
-        "position": 3,
-        "name": product.name,
-        "item": `https://www.decorktm.com/shop/${product.id}`
-      }
-    ]
+        position: 3,
+        name: product.name,
+        item: `https://www.decorktm.com/shop/${product.id}`,
+      },
+    ],
   };
+
+  // Prevent XSS vulnerabilities in JSON-LD script injection
+  const safeProductJson = JSON.stringify(productSchema).replace(/</g, "\\u003c");
+  const safeBreadcrumbJson = JSON.stringify(breadcrumbSchema).replace(/</g, "\\u003c");
 
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeProductJson }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeBreadcrumbJson }}
       />
       <ProductDetailClient />
     </>

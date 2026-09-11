@@ -1,6 +1,15 @@
 import nextConfig from "eslint-config-next";
 
 export default [
+  {
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.next/**",
+      "public/**",
+      "dashboard/backend/**",
+    ],
+  },
   ...nextConfig,
   {
     rules: {

@@ -104,11 +104,13 @@ export default function ShopPage() {
     ]
   };
 
+  const safeShopCatalogJson = JSON.stringify(shopCatalogSchema).replace(/</g, "\\u003c");
+
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(shopCatalogSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeShopCatalogJson }}
       />
       <ShopClient />
     </>

@@ -20,6 +20,10 @@
       "dest": "/api/chat"
     },
     {
+      "src": "/api/revalidate",
+      "dest": "/api/revalidate"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "dashboard/backend/src/server.js"
     },

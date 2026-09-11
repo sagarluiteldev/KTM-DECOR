@@ -1154,6 +1154,33 @@ app.get("/api/products/:id", async (req, res) => {
   }
 });
 
+// Next.js ISR Revalidation Webhook Trigger
+async function triggerNextRevalidation(tag = "products", productId = null) {
+  const frontendUrl =
+    process.env.FRONTEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://www.decorktm.com"
+      : "http://localhost:3000");
+  const secret = process.env.REVALIDATION_SECRET || "ktm_decor_reval_secure_key_2026";
+  try {
+    const res = await fetch(`${frontendUrl}/api/revalidate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-revalidate-secret": secret,
+      },
+      body: JSON.stringify({ secret, tag, id: productId }),
+    });
+    if (!res.ok) {
+      console.warn(`[ISR Revalidation] Next.js returned status ${res.status}`);
+    } else {
+      console.log(`[ISR Revalidation] Successfully triggered tag revalidation: ${tag} (ID: ${productId || "all"})`);
+    }
+  } catch (err) {
+    console.warn(`[ISR Revalidation] Could not notify Next.js revalidation at ${frontendUrl}:`, err.message);
+  }
+}
+
 // Create product (Admin only)
 app.post("/api/products", protect, admin, async (req, res) => {
   const {
@@ -1194,6 +1221,7 @@ app.post("/api/products", protect, admin, async (req, res) => {
     });
 
     triggerPusher("product_created", product);
+    triggerNextRevalidation("products", product.id);
     await logActivity(req.user._id, "Product Created", `Created catalog product "${product.name}"`);
     res.status(201).json(product);
   } catch (error) {
@@ -1236,6 +1264,7 @@ app.put("/api/products/:id", protect, admin, async (req, res) => {
     await product.save();
 
     triggerPusher("product_updated", product);
+    triggerNextRevalidation("products", product.id);
     await logActivity(req.user._id, "Product Updated", `Updated catalog product "${product.name}"`);
     res.json(product);
   } catch (error) {
@@ -1254,6 +1283,7 @@ app.delete("/api/products/:id", protect, admin, async (req, res) => {
     await product.deleteOne();
 
     triggerPusher("product_deleted", req.params.id);
+    triggerNextRevalidation("products", req.params.id);
     await logActivity(req.user._id, "Product Deleted", `Deleted catalog product "${product.name}"`);
     res.json({ message: "Product deleted from catalog" });
   } catch (error) {

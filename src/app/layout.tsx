@@ -22,7 +22,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.decorktm.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.decorktm.com"),
   verification: {
     google: "b98ok2OA0IqJbQ05BA7_R1S2W2RYHlz9273MWXF5whM",
   },
