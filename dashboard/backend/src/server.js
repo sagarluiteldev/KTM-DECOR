@@ -2893,7 +2893,7 @@ app.post("/api/salaries", protect, admin, validate(createSalarySchema), async (r
 
 // Update a salary record (Admin only)
 app.put("/api/salaries/:id", protect, admin, validate(updateSalarySchema), async (req, res) => {
-  const { bonus, deductions, finalSalary, status, paymentDate, paymentMethod, notes } = req.body;
+  const { month, year, bonus, deductions, finalSalary, status, paymentDate, paymentMethod, notes } = req.body;
   try {
     const salary = await Salary.findById(req.params.id);
     if (!salary) {
@@ -2907,6 +2907,23 @@ app.put("/api/salaries/:id", protect, admin, validate(updateSalarySchema), async
 
     const oldStatus = salary.status;
     const oldExpenseId = salary.linkedExpense;
+
+    // Update period if provided
+    if (month !== undefined || year !== undefined) {
+      const targetMonth = month !== undefined ? Number(month) : salary.month;
+      const targetYear = year !== undefined ? Number(year) : salary.year;
+      const duplicate = await Salary.findOne({
+        user: salary.user,
+        month: targetMonth,
+        year: targetYear,
+        _id: { $ne: salary._id }
+      });
+      if (duplicate) {
+        return res.status(400).json({ message: "Salary record already exists for this staff member in that period." });
+      }
+      salary.month = targetMonth;
+      salary.year = targetYear;
+    }
 
     // Update core fields
     if (bonus !== undefined) salary.bonus = bonus;

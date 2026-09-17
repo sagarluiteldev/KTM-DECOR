@@ -23,6 +23,7 @@ import {
   getCurrentNepaliDate,
   formatNepali,
   formatArchiveStatementLabel,
+  adToBs,
 } from "../utils/nepaliDate";
 
 export const SalesTab: React.FC = () => {
@@ -121,32 +122,26 @@ export const SalesTab: React.FC = () => {
   const [methodFilter, setMethodFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all"); // all, order, direct
 
+  // Period helpers
+  const lastMonthVal = currentBs.month === 1 ? 12 : currentBs.month - 1;
+  const lastMonthYear = currentBs.month === 1 ? currentBs.year - 1 : currentBs.year;
+  const currMonthInfo = NEPALI_MONTHS.find((m) => m.value === currentBs.month);
+  const lastMonthInfo = NEPALI_MONTHS.find((m) => m.value === lastMonthVal);
+  const selectedMonthInfo = exportMonth === "all" ? null : NEPALI_MONTHS.find((m) => m.value === Number(exportMonth));
+
+  const isDateInSelectedPeriod = (dateVal: string | Date | undefined) => {
+    if (exportMonth === "all") return true;
+    if (!dateVal) return false;
+    try {
+      const bs = adToBs(dateVal);
+      return bs.month === Number(exportMonth) && bs.year === Number(exportYear);
+    } catch {
+      return false;
+    }
+  };
+
   // Map orders by ID for guaranteed accurate base price resolution
   const ordersMap = new Map((Array.isArray(orders) ? orders : []).map((o) => [o._id.toString(), o]));
-
-  // Calculations
-  const orderSalesTotal = sales
-    .filter((s) => s.orderId)
-    .reduce((sum, s) => {
-      const orderIdStr = (typeof s.orderId === "object" && s.orderId !== null)
-        ? (s.orderId as any)._id?.toString()
-        : s.orderId?.toString();
-      const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
-
-      const pPrice = matchedOrder
-        ? (Number(matchedOrder.price) || 0)
-        : (s.orderId && typeof s.orderId === "object" && "price" in s.orderId)
-          ? (Number((s.orderId as any).price) || 0)
-          : (Number(s.amount) || 0);
-      return sum + pPrice;
-    }, 0);
-
-  const directSalesTotal = sales
-    .filter((s) => !s.orderId)
-    .reduce((sum, s) => sum + s.amount, 0);
-
-  const combinedTotal = orderSalesTotal + directSalesTotal;
-  const totalDuePayment = orders.reduce((acc, o) => acc + (o.duePayment || 0), 0);
 
   // Merging orders and custom sales for a unified ledger
   const unifiedSales = sales.map((s) => {
@@ -181,8 +176,28 @@ export const SalesTab: React.FC = () => {
     };
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Filtered Ledger
-  const filteredSales = unifiedSales.filter((s) => {
+  // Period Scoped Sales (Filtered by selected Month & Year)
+  const periodSales = unifiedSales.filter((s) => isDateInSelectedPeriod(s.date));
+
+  // Calculations scoped to the active selected month & year
+  const orderSalesTotal = periodSales
+    .filter((s) => s.type === "order")
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  const directSalesTotal = periodSales
+    .filter((s) => s.type === "direct")
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  const combinedTotal = orderSalesTotal + directSalesTotal;
+
+  // Outstanding dues for orders scoped to period (or all orders when All Time)
+  const periodOrders = exportMonth === "all"
+    ? orders
+    : orders.filter((o) => isDateInSelectedPeriod(o.orderDate || o.createdAt));
+  const totalDuePayment = periodOrders.reduce((acc, o) => acc + (o.duePayment || 0), 0);
+
+  // Filtered Ledger (Filtered by Period + Search + Method + Type)
+  const filteredSales = periodSales.filter((s) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch =
       s.client.toLowerCase().includes(query) ||
@@ -246,49 +261,94 @@ export const SalesTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Statement Download */}
-        <div className="flex items-center gap-2 self-start md:self-auto bg-border/20 p-2 rounded-xl border border-border/40">
-          <select
-            value={exportMonth}
-            onChange={(e) => setExportMonth(e.target.value)}
-            className="bg-card border border-border text-foreground text-[11px] rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-semibold cursor-pointer"
-          >
-            <option value="all">All Time</option>
-            {NEPALI_MONTHS.map((m) => (
-              <option key={m.value} value={m.value.toString()}>
-                {m.name} ({m.nepaliName})
-              </option>
-            ))}
-          </select>
-          <select
-            value={exportYear}
-            onChange={(e) => setExportYear(e.target.value)}
-            className="bg-card border border-border text-foreground text-[11px] rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent font-semibold cursor-pointer"
-          >
-            {NEPALI_YEARS.map((y) => (
-              <option key={y} value={y.toString()}>
-                {y} BS
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handlePreviewClick}
-            style={{
-              background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-black text-[11px] rounded-xl font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer hover:opacity-95"
-            title="Preview and Print PDF Sales Statement"
-          >
-            <Printer size={13} />
-            <span>Preview / Print PDF</span>
-          </button>
-          <button
-            onClick={handleExportClick}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-[11px] rounded-xl font-bold hover:bg-accent-dark transition-all disabled:opacity-50"
-          >
-            {exporting ? "Exporting..." : "Export CSV"}
-          </button>
+        {/* Quick Month Switcher & Statement Actions */}
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* Quick Period Chips */}
+          <div className="flex items-center gap-1 bg-border/20 p-1 rounded-xl border border-border/40">
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(currentBs.month.toString());
+                setExportYear(currentBs.year.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === currentBs.month.toString() && exportYear === currentBs.year.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Current ({currMonthInfo?.name || "Now"})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(lastMonthVal.toString());
+                setExportYear(lastMonthYear.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === lastMonthVal.toString() && exportYear === lastMonthYear.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Last Month ({lastMonthInfo?.name || "Prev"})
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportMonth("all")}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === "all"
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              All Time
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-border/20 p-1 rounded-xl border border-border/40">
+            <select
+              value={exportMonth}
+              onChange={(e) => setExportMonth(e.target.value)}
+              className="bg-card border border-border text-foreground text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent font-semibold cursor-pointer h-7"
+            >
+              <option value="all">All Time</option>
+              {NEPALI_MONTHS.map((m) => (
+                <option key={m.value} value={m.value.toString()}>
+                  {m.name} ({m.nepaliName})
+                </option>
+              ))}
+            </select>
+            <select
+              value={exportYear}
+              onChange={(e) => setExportYear(e.target.value)}
+              className="bg-card border border-border text-foreground text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent font-semibold cursor-pointer h-7"
+            >
+              {NEPALI_YEARS.map((y) => (
+                <option key={y} value={y.toString()}>
+                  {y} BS
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handlePreviewClick}
+              style={{
+                background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-black text-[11px] rounded-lg font-bold transition-all shadow-xs active:scale-95 cursor-pointer hover:opacity-95 h-7"
+              title="Preview and Print PDF Sales Statement"
+            >
+              <Printer size={12} />
+              <span>PDF</span>
+            </button>
+            <button
+              onClick={handleExportClick}
+              disabled={exporting}
+              className="flex items-center gap-1 px-2.5 py-1 bg-accent text-white text-[11px] rounded-lg font-bold hover:bg-accent-dark transition-all disabled:opacity-50 h-7"
+            >
+              {exporting ? "..." : "CSV"}
+            </button>
+          </div>
           {user?.role === "admin" && (
             <button
               onClick={handleResyncClick}
@@ -354,9 +414,13 @@ export const SalesTab: React.FC = () => {
           }}
         >
           <div className="relative z-10 space-y-1">
-            <span className="text-xs font-semibold text-black/85 uppercase tracking-wider block">Total Sales (Product Revenue)</span>
+            <span className="text-xs font-semibold text-black/85 uppercase tracking-wider block">
+              Total Sales {exportMonth === "all" ? "(All Time)" : `(${selectedMonthInfo?.name || "Month"} ${exportYear} BS)`}
+            </span>
             <h3 className="text-3xl sm:text-4xl font-semibold font-display text-black leading-none mt-1">Rs. {combinedTotal.toLocaleString()}</h3>
-            <p className="text-xs text-black/75 font-medium mt-1">Excludes delivery & fitting charges</p>
+            <p className="text-xs text-black/75 font-medium mt-1">
+              {periodSales.length} {periodSales.length === 1 ? "sale" : "sales"} recorded • Excludes delivery & fitting charges
+            </p>
           </div>
           <div
             style={{ background: "rgba(0, 0, 0, 0.75)" }}
@@ -534,7 +598,9 @@ export const SalesTab: React.FC = () => {
               {filteredSales.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted font-semibold">
-                    No sales records logged matching these filters.
+                    {exportMonth === "all"
+                      ? "No sales records logged matching these filters."
+                      : `No sales records logged for ${selectedMonthInfo?.name || "Month"} ${exportYear} BS. Switch months above or click All Time.`}
                   </td>
                 </tr>
               ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useStore } from "../store/useStore";
 import {
   Activity as ActivityIcon,
@@ -19,9 +19,11 @@ import {
   MapPin,
   X,
   Truck,
-  Wrench
+  Wrench,
+  ChevronLeft,
+  ChevronRight
 } from "./ui/solar-icons";
-import { Printer, Download } from "lucide-react";
+import { Printer, Download, History, ArrowUpRight, ArrowDownRight, Layers } from "lucide-react";
 import { OrderDetailModal } from "./OrderDetailModal";
 import { StatementPreviewModal } from "./StatementPreviewModal";
 import { RevenueGrowthChart } from "./RevenueGrowthChart";
@@ -33,6 +35,7 @@ import {
   NEPALI_MONTHS,
   NEPALI_YEARS,
   formatArchiveStatementLabel,
+  adToBs,
 } from "../utils/nepaliDate";
 
 interface OverviewProps {
@@ -93,6 +96,58 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   const [exportYear, setExportYear] = useState<string>(currentBs.year.toString());
   const [exportingType, setExportingType] = useState<string | null>(null);
   const [overviewChartType, setOverviewChartType] = useState<"revenue" | "dual">("dual");
+
+  // Overview BS Month & Year Active Period Filtering (defaults strictly to current active BS month)
+  const [overviewMonth, setOverviewMonth] = useState<number>(currentBs.month);
+  const [overviewYear, setOverviewYear] = useState<number>(currentBs.year);
+  const [viewMode, setViewMode] = useState<"monthly" | "all_time">("monthly");
+  const [ledgerFilter, setLedgerFilter] = useState<"all" | "sale" | "expense" | "purchase">("all");
+
+  const lastBsMonth = currentBs.month === 1 ? 12 : currentBs.month - 1;
+  const lastBsYear = currentBs.month === 1 ? currentBs.year - 1 : currentBs.year;
+
+  const isCurrentMonth = overviewMonth === currentBs.month && overviewYear === currentBs.year && viewMode === "monthly";
+  const isLastMonth = overviewMonth === lastBsMonth && overviewYear === lastBsYear && viewMode === "monthly";
+
+  // Check if a given date falls in the selected BS month/year
+  const isDateInSelectedPeriod = (dateVal?: Date | string | null) => {
+    if (!dateVal) return false;
+    if (viewMode === "all_time") return true;
+    const bs = adToBs(dateVal);
+    return bs.month === overviewMonth && bs.year === overviewYear;
+  };
+
+  const handlePrevMonth = () => {
+    setViewMode("monthly");
+    if (overviewMonth === 1) {
+      setOverviewMonth(12);
+      setOverviewYear((prev) => prev - 1);
+    } else {
+      setOverviewMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    setViewMode("monthly");
+    if (overviewMonth === 12) {
+      setOverviewMonth(1);
+      setOverviewYear((prev) => prev + 1);
+    } else {
+      setOverviewMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleGoToCurrentMonth = () => {
+    setViewMode("monthly");
+    setOverviewMonth(currentBs.month);
+    setOverviewYear(currentBs.year);
+  };
+
+  const handleGoToLastMonth = () => {
+    setViewMode("monthly");
+    setOverviewMonth(lastBsMonth);
+    setOverviewYear(lastBsYear);
+  };
 
   useEffect(() => {
     if (user?.role === "admin") {
@@ -172,8 +227,10 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   // Active orders are those in design, manufacturing, or completed (not yet delivered or paid)
   const activeOrdersCount = orders.filter((o) => !o.deleted && o.stage !== "delivered" && o.stage !== "paid").length;
 
-  // Dynamic Sales: Sum of total cost of all completed tasks + sales ledger entries (excluding delivery and fitting)
-  const taskSales = completedTasks.reduce((acc, t) => acc + (t.totalCost || 0), 0);
+  // Dynamic Sales: Sum of total cost of completed tasks + sales ledger entries in active period
+  const taskSales = completedTasks
+    .filter((t) => isDateInSelectedPeriod(t.updatedAt || t.createdAt))
+    .reduce((acc, t) => acc + (t.totalCost || 0), 0);
 
   // Safe array check for sales
   const safeSales = Array.isArray(sales) ? sales : [];
@@ -183,7 +240,15 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
 
   // Order sales strictly reflect product base price without delivery or fitting charges
   const orderSales = safeSales
-    .filter((s) => s.orderId)
+    .filter((s) => {
+      if (!s.orderId) return false;
+      const orderIdStr = (typeof s.orderId === "object" && s.orderId !== null)
+        ? (s.orderId as any)._id?.toString()
+        : s.orderId?.toString();
+      const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
+      const effectiveDate = (matchedOrder && matchedOrder.orderDate) ? matchedOrder.orderDate : s.date;
+      return isDateInSelectedPeriod(effectiveDate);
+    })
     .reduce((acc, s) => {
       const orderIdStr = (typeof s.orderId === "object" && s.orderId !== null)
         ? (s.orderId as any)._id?.toString()
@@ -199,33 +264,118 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
     }, 0);
 
   const directSales = safeSales
-    .filter((s) => !s.orderId)
+    .filter((s) => !s.orderId && isDateInSelectedPeriod(s.date))
     .reduce((acc, s) => acc + (s.amount || 0), 0);
 
   const totalSales = taskSales + orderSales + directSales;
 
-  // Delivery and Fitting charges calculated from orders (kept separate for manual calculation)
-  const totalDeliveryCharges = orders.filter((o) => !o.deleted).reduce((acc, o) => acc + (o.deliveryPrice || 0), 0);
-  const totalFittingCharges = orders.filter((o) => !o.deleted).reduce((acc, o) => acc + (o.installationPrice || 0), 0);
+  // Delivery and Fitting charges calculated from orders in active period
+  const totalDeliveryCharges = orders
+    .filter((o) => !o.deleted && isDateInSelectedPeriod(o.deliveryDate || o.orderDate || o.createdAt))
+    .reduce((acc, o) => acc + (o.deliveryPrice || 0), 0);
+  const totalFittingCharges = orders
+    .filter((o) => !o.deleted && isDateInSelectedPeriod(o.deliveryDate || o.orderDate || o.createdAt))
+    .reduce((acc, o) => acc + (o.installationPrice || 0), 0);
   const totalDuePayment = orders.filter((o) => !o.deleted).reduce((acc, o) => acc + (o.duePayment || 0), 0);
 
   const pendingTasks = tasks.filter((t) => t.status !== "done");
-  const completedTasksCount = completedTasks.length;
+  const completedTasksCount = completedTasks.filter((t) => isDateInSelectedPeriod(t.updatedAt || t.createdAt)).length;
   const pinnedTasks = tasks.filter((t) => t.pinned && t.status !== "done");
 
-  // New calculations for Overview Cards
-  const totalExpensesVal = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalPurchasesVal = purchases.reduce((sum, p) => sum + p.amount, 0);
+  // Scoped calculations for Overview Cards
+  const scopedExpenses = expenses.filter((e) => isDateInSelectedPeriod(e.date));
+  const scopedPurchases = purchases.filter((p) => isDateInSelectedPeriod(p.date));
+
+  const totalExpensesVal = scopedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalPurchasesVal = scopedPurchases.reduce((sum, p) => sum + p.amount, 0);
   const netProfitVal = totalSales - (totalExpensesVal + totalPurchasesVal);
-  const outstandingPurchasesVal = purchases.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
+  const outstandingPurchasesVal = scopedPurchases.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
 
   const expenseCategorySums = {
-    salary: expenses.filter((e) => e.category === "salary").reduce((sum, e) => sum + e.amount, 0),
-    rent: expenses.filter((e) => e.category === "rent").reduce((sum, e) => sum + e.amount, 0),
-    travel: expenses.filter((e) => e.category === "travel").reduce((sum, e) => sum + e.amount, 0),
-    food: expenses.filter((e) => e.category === "food").reduce((sum, e) => sum + e.amount, 0),
-    miscellaneous: expenses.filter((e) => e.category === "miscellaneous").reduce((sum, e) => sum + e.amount, 0),
+    salary: scopedExpenses.filter((e) => e.category === "salary").reduce((sum, e) => sum + e.amount, 0),
+    rent: scopedExpenses.filter((e) => e.category === "rent").reduce((sum, e) => sum + e.amount, 0),
+    travel: scopedExpenses.filter((e) => e.category === "travel").reduce((sum, e) => sum + e.amount, 0),
+    food: scopedExpenses.filter((e) => e.category === "food").reduce((sum, e) => sum + e.amount, 0),
+    miscellaneous: scopedExpenses.filter((e) => e.category === "miscellaneous").reduce((sum, e) => sum + e.amount, 0),
   };
+
+  // Unified Chronological Monthly Transactions
+  const monthlyTransactions = useMemo(() => {
+    const list: {
+      id: string;
+      type: "sale" | "expense" | "purchase";
+      date: string | Date;
+      bsDate: string;
+      title: string;
+      party: string;
+      categoryOrMethod: string;
+      amount: number;
+      isInflow: boolean;
+      status?: string;
+    }[] = [];
+
+    // Add Sales
+    safeSales.forEach((s) => {
+      const orderIdStr = (typeof s.orderId === "object" && s.orderId !== null)
+        ? (s.orderId as any)._id?.toString()
+        : s.orderId?.toString();
+      const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
+      const effectiveDate = (matchedOrder && matchedOrder.orderDate) ? matchedOrder.orderDate : s.date;
+
+      if (isDateInSelectedPeriod(effectiveDate)) {
+        const pPrice = matchedOrder
+          ? (Number(matchedOrder.price) || 0)
+          : (Number(s.amount) || 0);
+
+        list.push({
+          id: `sale-${s._id}`,
+          type: "sale",
+          date: effectiveDate,
+          bsDate: formatNepali(effectiveDate),
+          title: s.productName,
+          party: s.clientName,
+          categoryOrMethod: s.paymentMethod ? s.paymentMethod.replace("_", " ") : "cash",
+          amount: pPrice,
+          isInflow: true,
+          status: "received"
+        });
+      }
+    });
+
+    // Add Expenses
+    scopedExpenses.forEach((e) => {
+      list.push({
+        id: `exp-${e._id}`,
+        type: "expense",
+        date: e.date,
+        bsDate: formatNepali(e.date),
+        title: e.title,
+        party: e.description ? e.description.slice(0, 40) : "Expense",
+        categoryOrMethod: e.category,
+        amount: e.amount,
+        isInflow: false,
+        status: "paid"
+      });
+    });
+
+    // Add Purchases
+    scopedPurchases.forEach((p) => {
+      list.push({
+        id: `pur-${p._id}`,
+        type: "purchase",
+        date: p.date,
+        bsDate: formatNepali(p.date),
+        title: p.itemDetails || "Purchase Order",
+        party: p.supplier,
+        categoryOrMethod: p.status === "paid" ? "Paid" : "Pending",
+        amount: p.amount,
+        isInflow: false,
+        status: p.status
+      });
+    });
+
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [safeSales, scopedExpenses, scopedPurchases, overviewMonth, overviewYear, viewMode]);
 
   const activeId = user?.email === "staff@ktmdecor.com" ? activeStaffProfile?._id : user?._id;
 
@@ -542,6 +692,169 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* ─── BS MONTH & YEAR SELECTOR / NAVIGATION BAR ─── */}
+      {user?.role === "admin" && (
+        <div className="space-y-3">
+          <div className="bg-card border border-border/80 rounded-[28px] p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            {/* Left Side: Active Period Status */}
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center text-black shadow-xs shrink-0"
+                style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
+              >
+                <Calendar size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-muted">
+                    {viewMode === "all_time" ? "Overall Records" : "Financial Period"}
+                  </span>
+                  {isCurrentMonth ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/25">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Live Current Month
+                    </span>
+                  ) : isLastMonth ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                      Previous Month Record
+                    </span>
+                  ) : viewMode === "monthly" ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                      Historical Record
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25">
+                      All-Time Aggregate
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-base sm:text-lg font-bold text-foreground">
+                  {viewMode === "all_time"
+                    ? "All-Time Lifetime Overview"
+                    : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} (${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.nepaliName}) ${overviewYear} BS`}
+                </h2>
+              </div>
+            </div>
+
+            {/* Right Side: Quick Filters & Month Selectors */}
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <button
+                onClick={handleGoToCurrentMonth}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                  isCurrentMonth
+                    ? "bg-accent/10 border-accent/30 text-accent shadow-2xs"
+                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                }`}
+              >
+                <span>Current Month ({NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.short})</span>
+              </button>
+
+              <button
+                onClick={handleGoToLastMonth}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                  isLastMonth
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-2xs"
+                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                }`}
+              >
+                <History size={13} />
+                <span>Last Month ({NEPALI_MONTHS.find((m) => m.value === lastBsMonth)?.short})</span>
+              </button>
+
+              <button
+                onClick={() => setViewMode(viewMode === "all_time" ? "monthly" : "all_time")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                  viewMode === "all_time"
+                    ? "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-2xs"
+                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                }`}
+              >
+                <span>All-Time</span>
+              </button>
+
+              {/* Month / Year Stepper Dropdowns */}
+              {viewMode === "monthly" && (
+                <div className="flex items-center gap-1 bg-muted/20 border border-border/70 p-1 rounded-xl">
+                  <button
+                    onClick={handlePrevMonth}
+                    className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
+                    title="Previous Month"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <select
+                    value={overviewMonth}
+                    onChange={(e) => {
+                      setViewMode("monthly");
+                      setOverviewMonth(Number(e.target.value));
+                    }}
+                    className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
+                  >
+                    {NEPALI_MONTHS.map((m) => (
+                      <option key={m.value} value={m.value} className="bg-card">
+                        {m.name} ({m.nepaliName})
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={overviewYear}
+                    onChange={(e) => {
+                      setViewMode("monthly");
+                      setOverviewYear(Number(e.target.value));
+                    }}
+                    className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
+                  >
+                    {NEPALI_YEARS.map((y) => (
+                      <option key={y} value={y} className="bg-card">
+                        {y} BS
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={handleNextMonth}
+                    className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
+                    title="Next Month"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Historical Notification Banner */}
+          {!isCurrentMonth && (
+            <div className="flex items-center justify-between p-3.5 px-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <History size={16} className="text-amber-500 shrink-0" />
+                <span>
+                  You are currently inspecting historical records for{" "}
+                  <strong>
+                    {viewMode === "all_time"
+                      ? "All-Time Lifetime Overview"
+                      : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}
+                  </strong>
+                  . Live transactions are recorded in{" "}
+                  <strong>
+                    {NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.name} {currentBs.year} BS
+                  </strong>
+                  .
+                </span>
+              </div>
+              <button
+                onClick={handleGoToCurrentMonth}
+                className="underline font-bold hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer shrink-0 ml-3"
+              >
+                Return to Live Month &rarr;
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── PINNED / HIGH PRIORITY SECTION ─── */}
       {pinnedTasks.length > 0 && (
@@ -954,6 +1267,190 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
                 <span>View Purchases Tracker</span>
                 <span>&rarr;</span>
               </button>
+            </div>
+          </div>
+
+          {/* ─── UNIFIED MONTHLY FINANCIAL LEDGER (SALES, EXPENSES & PURCHASES) ─── */}
+          <div className="bg-card border border-border/80 rounded-[32px] shadow-sm p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="p-2 text-white rounded-xl shadow-xs"
+                    style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+                  >
+                    <TrendingUp size={18} />
+                  </div>
+                  <h3 className="font-bold text-base font-display text-foreground">
+                    Monthly Financial Ledger
+                  </h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-accent font-bold">
+                    {viewMode === "all_time"
+                      ? "All-Time"
+                      : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}
+                  </span>
+                </div>
+                <p className="text-xs text-muted mt-1">
+                  Unified monthly inflow and outflow ledger combining Sales, Operating Expenses, and Purchases.
+                </p>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1.5 bg-muted/20 border border-border/70 p-1 rounded-xl shrink-0 self-start sm:self-auto">
+                <button
+                  onClick={() => setLedgerFilter("all")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ledgerFilter === "all"
+                      ? "bg-card text-foreground shadow-2xs"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  All ({monthlyTransactions.length})
+                </button>
+                <button
+                  onClick={() => setLedgerFilter("sale")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ledgerFilter === "sale"
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-2xs"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Sales ({monthlyTransactions.filter((t) => t.type === "sale").length})
+                </button>
+                <button
+                  onClick={() => setLedgerFilter("expense")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ledgerFilter === "expense"
+                      ? "bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/25 shadow-2xs"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Expenses ({monthlyTransactions.filter((t) => t.type === "expense").length})
+                </button>
+                <button
+                  onClick={() => setLedgerFilter("purchase")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ledgerFilter === "purchase"
+                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 shadow-2xs"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Purchases ({monthlyTransactions.filter((t) => t.type === "purchase").length})
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar for the Selected Period */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 p-4 rounded-2xl bg-muted/15 border border-border/60">
+              <div>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Inflow (Sales)</span>
+                <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  + Rs. {totalSales.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Operating Expenses</span>
+                <span className="text-base sm:text-lg font-black text-red-600 dark:text-red-400 mt-0.5 block">
+                  - Rs. {totalExpensesVal.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Raw Material Purchases</span>
+                <span className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5 block">
+                  - Rs. {totalPurchasesVal.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Net Period Balance</span>
+                <span
+                  className={`text-base sm:text-lg font-black mt-0.5 block ${
+                    netProfitVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  {netProfitVal >= 0 ? "+" : ""} Rs. {netProfitVal.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Transactions Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border/70 text-[10px] font-bold uppercase tracking-wider text-muted">
+                    <th className="py-2.5 px-3">Date (BS)</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Description / Item</th>
+                    <th className="py-2.5 px-3">Client / Vendor</th>
+                    <th className="py-2.5 px-3">Method / Category</th>
+                    <th className="py-2.5 px-3 text-right">Amount (NPR)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50 text-xs">
+                  {monthlyTransactions
+                    .filter((t) => ledgerFilter === "all" || t.type === ledgerFilter)
+                    .map((item) => (
+                      <tr key={item.id} className="hover:bg-muted/15 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-muted whitespace-nowrap">
+                          {item.bsDate}
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {item.type === "sale" ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                              Sale
+                            </span>
+                          ) : item.type === "expense" ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
+                              Expense
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                              Purchase
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-foreground">
+                          {item.title}
+                        </td>
+                        <td className="py-2.5 px-3 text-muted">
+                          {item.party}
+                        </td>
+                        <td className="py-2.5 px-3 text-muted capitalize">
+                          {item.categoryOrMethod}
+                        </td>
+                        <td
+                          className={`py-2.5 px-3 font-bold text-right whitespace-nowrap ${
+                            item.isInflow
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {item.isInflow ? "+" : "-"} Rs. {item.amount.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+
+                  {monthlyTransactions.filter((t) => ledgerFilter === "all" || t.type === ledgerFilter).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Clock size={24} className="text-muted/60" />
+                          <p className="font-bold text-xs">
+                            No {ledgerFilter !== "all" ? ledgerFilter : "financial"} records found for{" "}
+                            {viewMode === "all_time"
+                              ? "all-time"
+                              : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}.
+                          </p>
+                          <p className="text-[11px] text-muted/80">
+                            {isCurrentMonth
+                              ? "As new sales, expenses, and purchases are entered this month, they will automatically appear here."
+                              : "You can switch months using the selector at the top to inspect other periods."}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

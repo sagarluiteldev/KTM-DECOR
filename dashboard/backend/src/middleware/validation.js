@@ -122,6 +122,8 @@ export const createSalarySchema = z.object({
 
 // Update Salary Schema
 export const updateSalarySchema = z.object({
+  month: z.number().min(1).max(12).optional(),
+  year: z.number().optional(),
   bonus: z.number().nonnegative().optional(),
   deductions: z.number().nonnegative().optional(),
   finalSalary: z.number().nonnegative().optional(),

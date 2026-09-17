@@ -20,6 +20,7 @@ import {
   getCurrentNepaliDate,
   formatNepali,
   formatArchiveStatementLabel,
+  adToBs,
 } from "../utils/nepaliDate";
 
 interface FormPurchaseItem {
@@ -122,12 +123,33 @@ export const PurchaseTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Calculations
-  const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
-  const pendingPurchases = purchases.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
+  // Period helpers
+  const lastMonthVal = currentBs.month === 1 ? 12 : currentBs.month - 1;
+  const lastMonthYear = currentBs.month === 1 ? currentBs.year - 1 : currentBs.year;
+  const currMonthInfo = NEPALI_MONTHS.find((m) => m.value === currentBs.month);
+  const lastMonthInfo = NEPALI_MONTHS.find((m) => m.value === lastMonthVal);
+  const selectedMonthInfo = exportMonth === "all" ? null : NEPALI_MONTHS.find((m) => m.value === Number(exportMonth));
 
-  // Filtered List
-  const filteredPurchases = purchases.filter((p) => {
+  const isDateInSelectedPeriod = (dateVal: string | Date | undefined) => {
+    if (exportMonth === "all") return true;
+    if (!dateVal) return false;
+    try {
+      const bs = adToBs(dateVal);
+      return bs.month === Number(exportMonth) && bs.year === Number(exportYear);
+    } catch {
+      return false;
+    }
+  };
+
+  // Scoped Purchases for Selected Period
+  const periodPurchases = purchases.filter((p) => isDateInSelectedPeriod(p.date));
+
+  // Calculations scoped to the active selected month & year
+  const totalPurchases = periodPurchases.reduce((sum, p) => sum + p.amount, 0);
+  const pendingPurchases = periodPurchases.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
+
+  // Filtered List (scoped to period + search + status)
+  const filteredPurchases = periodPurchases.filter((p) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch =
       p.supplier.toLowerCase().includes(query) ||
@@ -329,6 +351,49 @@ export const PurchaseTab: React.FC = () => {
 
         {/* Top Buttons & Actions Toolbar (Compact and responsive without horizontal scroll) */}
         <div className="flex flex-wrap items-center gap-2 self-stretch xl:self-auto">
+          {/* Quick Period Chips */}
+          <div className="flex items-center gap-1 bg-border/20 p-1 rounded-xl border border-border/40">
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(currentBs.month.toString());
+                setExportYear(currentBs.year.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === currentBs.month.toString() && exportYear === currentBs.year.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Current ({currMonthInfo?.name || "Now"})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(lastMonthVal.toString());
+                setExportYear(lastMonthYear.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === lastMonthVal.toString() && exportYear === lastMonthYear.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Last Month ({lastMonthInfo?.name || "Prev"})
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportMonth("all")}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === "all"
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              All Time
+            </button>
+          </div>
+
           {/* Quick Statement Download */}
           <div className="flex flex-wrap items-center gap-1.5 bg-border/20 p-1.5 rounded-xl border border-border/40">
             <select
@@ -433,9 +498,13 @@ export const PurchaseTab: React.FC = () => {
           }}
         >
           <div className="relative z-10 space-y-1">
-            <span className="text-xs font-semibold text-black/85 uppercase tracking-wider block">Total Purchases Cost</span>
+            <span className="text-xs font-semibold text-black/85 uppercase tracking-wider block">
+              Total Purchases {exportMonth === "all" ? "(All Time)" : `(${selectedMonthInfo?.name || "Month"} ${exportYear} BS)`}
+            </span>
             <h3 className="text-3xl sm:text-4xl font-semibold font-display text-black leading-none mt-1">Rs. {totalPurchases.toLocaleString()}</h3>
-            <p className="text-xs text-black/75 font-medium mt-1">{purchases.length} vendor invoices</p>
+            <p className="text-xs text-black/75 font-medium mt-1">
+              {periodPurchases.length} {periodPurchases.length === 1 ? "invoice" : "invoices"} recorded {exportMonth === "all" ? "(All Time)" : `in ${selectedMonthInfo?.name || "Month"} ${exportYear}`}
+            </p>
           </div>
           <div className="p-3 bg-black text-white rounded-2xl shadow-md shrink-0 relative z-10">
             <Briefcase size={24} />
@@ -447,7 +516,7 @@ export const PurchaseTab: React.FC = () => {
           <div className="space-y-1">
             <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Outstanding Vendor Dues</span>
             <h3 className="text-3xl sm:text-4xl font-bold font-display text-red-500 leading-none mt-1">Rs. {pendingPurchases.toLocaleString()}</h3>
-            <p className="text-[10px] text-muted mt-1 font-medium">{purchases.filter((p) => p.status === "pending").length} unpaid invoices</p>
+            <p className="text-[10px] text-muted mt-1 font-medium">{periodPurchases.filter((p) => p.status === "pending").length} unpaid invoices in period</p>
           </div>
           <div
             style={{ background: "linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%)" }}
@@ -505,7 +574,9 @@ export const PurchaseTab: React.FC = () => {
               {filteredPurchases.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted">
-                    No supplier purchase invoices logged matching these criteria.
+                    {exportMonth === "all"
+                      ? "No supplier purchase invoices logged matching these criteria."
+                      : `No supplier purchase invoices logged for ${selectedMonthInfo?.name || "Month"} ${exportYear} BS. Switch months above or select All Time.`}
                   </td>
                 </tr>
               ) : (

@@ -21,6 +21,7 @@ import {
   getCurrentNepaliDate,
   formatNepali,
   formatArchiveStatementLabel,
+  adToBs,
 } from "../utils/nepaliDate";
 
 export const ExpensesTab: React.FC = () => {
@@ -137,11 +138,32 @@ export const ExpensesTab: React.FC = () => {
     return "miscellaneous"; // defaults and other types mapped here
   };
 
-  // Calculations
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // Period helpers
+  const lastMonthVal = currentBs.month === 1 ? 12 : currentBs.month - 1;
+  const lastMonthYear = currentBs.month === 1 ? currentBs.year - 1 : currentBs.year;
+  const currMonthInfo = NEPALI_MONTHS.find((m) => m.value === currentBs.month);
+  const lastMonthInfo = NEPALI_MONTHS.find((m) => m.value === lastMonthVal);
+  const selectedMonthInfo = exportMonth === "all" ? null : NEPALI_MONTHS.find((m) => m.value === Number(exportMonth));
+
+  const isDateInSelectedPeriod = (dateVal: string | Date | undefined) => {
+    if (exportMonth === "all") return true;
+    if (!dateVal) return false;
+    try {
+      const bs = adToBs(dateVal);
+      return bs.month === Number(exportMonth) && bs.year === Number(exportYear);
+    } catch {
+      return false;
+    }
+  };
+
+  // Scoped Expenses for Selected Period
+  const periodExpenses = expenses.filter((e) => isDateInSelectedPeriod(e.date));
+
+  // Calculations scoped to the active selected month & year
+  const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Filtered List (strictly sorted chronologically by date descending)
-  const filteredExpenses = expenses
+  const filteredExpenses = periodExpenses
     .filter((e) => {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
@@ -267,11 +289,11 @@ export const ExpensesTab: React.FC = () => {
     return [x, y];
   };
 
-  const salarySum = expenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "salary" ? e.amount : 0), 0);
-  const rentSum = expenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "rent" ? e.amount : 0), 0);
-  const travelSum = expenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "travel" ? e.amount : 0), 0);
-  const foodSum = expenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "food" ? e.amount : 0), 0);
-  const miscSum = expenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "miscellaneous" ? e.amount : 0), 0);
+  const salarySum = periodExpenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "salary" ? e.amount : 0), 0);
+  const rentSum = periodExpenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "rent" ? e.amount : 0), 0);
+  const travelSum = periodExpenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "travel" ? e.amount : 0), 0);
+  const foodSum = periodExpenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "food" ? e.amount : 0), 0);
+  const miscSum = periodExpenses.reduce((sum, e) => sum + (getNormalizedCategory(e.category) === "miscellaneous" ? e.amount : 0), 0);
   const totalCategorySum = salarySum + rentSum + travelSum + foodSum + miscSum || 1;
 
   const categoriesData = [
@@ -326,7 +348,50 @@ export const ExpensesTab: React.FC = () => {
 
         {/* Top Buttons & Actions Toolbar (Compact and responsive without horizontal scroll) */}
         <div className="flex flex-wrap items-center gap-2 self-stretch xl:self-auto">
-          {/* Quick Statement Download */}
+          {/* Quick Period Chips */}
+          <div className="flex items-center gap-1 bg-border/20 p-1 rounded-xl border border-border/40">
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(currentBs.month.toString());
+                setExportYear(currentBs.year.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === currentBs.month.toString() && exportYear === currentBs.year.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Current ({currMonthInfo?.name || "Now"})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExportMonth(lastMonthVal.toString());
+                setExportYear(lastMonthYear.toString());
+              }}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === lastMonthVal.toString() && exportYear === lastMonthYear.toString()
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Last Month ({lastMonthInfo?.name || "Prev"})
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportMonth("all")}
+              className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-all ${
+                exportMonth === "all"
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              All Time
+            </button>
+          </div>
+
+          {/* Quick Statement Download & Selects */}
           <div className="flex flex-wrap items-center gap-1.5 bg-border/20 p-1.5 rounded-xl border border-border/40">
             <select
               value={exportMonth}
@@ -434,9 +499,13 @@ export const ExpensesTab: React.FC = () => {
               <DollarSign size={24} />
             </div>
             <div>
-              <span className="text-xs font-semibold text-black/85 uppercase tracking-wider">Total Overall Expenses</span>
+              <span className="text-xs font-semibold text-black/85 uppercase tracking-wider">
+                Total Expenses {exportMonth === "all" ? "(All Time)" : `(${selectedMonthInfo?.name || "Month"} ${exportYear} BS)`}
+              </span>
               <h3 className="text-3xl sm:text-4xl font-semibold font-display text-black mt-1 leading-none">Rs. {totalExpenses.toLocaleString()}</h3>
-              <p className="text-xs text-black/75 mt-1 font-medium">{expenses.length} logs recorded</p>
+              <p className="text-xs text-black/75 mt-1 font-medium">
+                {periodExpenses.length} {periodExpenses.length === 1 ? "log" : "logs"} recorded {exportMonth === "all" ? "(All Time)" : `in ${selectedMonthInfo?.name || "Month"} ${exportYear}`}
+              </p>
             </div>
           </div>
 
@@ -580,7 +649,9 @@ export const ExpensesTab: React.FC = () => {
               {filteredExpenses.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted">
-                    No expenses logged matching selected filters.
+                    {exportMonth === "all"
+                      ? "No expenses logged matching selected filters."
+                      : `No expense logs recorded for ${selectedMonthInfo?.name || "Month"} ${exportYear} BS. Switch months above or select All Time.`}
                   </td>
                 </tr>
               ) : (

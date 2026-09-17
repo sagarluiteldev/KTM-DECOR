@@ -747,20 +747,24 @@ export const StaffManagement: React.FC = () => {
   };
 
   // Handler for changing month and year inside the Process Monthly Salary modal
-  const handleSalaryMonthYearChange = async (newMonth: number, newYear: number, newIsoDate?: string) => {
+  const handleSalaryMonthYearChange = async (newMonth: number, newYear: number) => {
     setSalaryModalMonth(newMonth);
     setSalaryModalYear(newYear);
 
-    const targetDate = newIsoDate || bsToAd(newYear, newMonth, Math.min(28, getDaysInBsMonth(newYear, newMonth))).toISOString().slice(0, 10);
-    setSalaryPaymentDate(targetDate);
+    // If payment date is not yet set, set a reasonable default
+    if (!salaryPaymentDate) {
+      const targetDate = bsToAd(newYear, newMonth, Math.min(28, getDaysInBsMonth(newYear, newMonth))).toISOString().slice(0, 10);
+      setSalaryPaymentDate(targetDate);
+    }
 
-    // If creating a new salary record, auto-calculate stats for this employee and period
-    if (!editingSalaryRecord && selectedSalaryUser) {
+    // Auto-calculate attendance stats for this employee and period
+    const userToEvaluate = editingSalaryRecord ? editingSalaryRecord.user : selectedSalaryUser;
+    if (userToEvaluate) {
       const totalWorkingDays = getWorkingDaysInMonth(newYear, newMonth);
-      const base = salaryBase || selectedSalaryUser.baseSalary || 30000;
+      const base = salaryBase || (userToEvaluate as any).baseSalary || 30000;
 
       if (newMonth === selectedMonth && newYear === selectedYear) {
-        const stats = getUserMonthlyStats(selectedSalaryUser._id);
+        const stats = getUserMonthlyStats((userToEvaluate as any)._id || userToEvaluate);
         const dailyRate = base / (stats.totalWorkingDays || 30);
         const calculatedDeductions = Math.round(stats.offDays * dailyRate);
         const net = Math.max(0, Math.round(base - calculatedDeductions));
@@ -773,7 +777,8 @@ export const StaffManagement: React.FC = () => {
         try {
           const { token } = useStore.getState();
           const currentApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://localhost:5001");
-          const res = await fetch(`${currentApiUrl}/api/attendance?userId=${selectedSalaryUser._id}&month=${newMonth}&year=${newYear}`, {
+          const evalUserId = (userToEvaluate as any)._id || userToEvaluate;
+          const res = await fetch(`${currentApiUrl}/api/attendance?userId=${evalUserId}&month=${newMonth}&year=${newYear}`, {
             headers: {
               Authorization: `Bearer ${token}`
             }
@@ -819,17 +824,6 @@ export const StaffManagement: React.FC = () => {
     }
   };
 
-  const handleCustomDateChange = (isoDate: string) => {
-    const nd = toNepaliDate(isoDate);
-    if (nd) {
-      const newMonth = nd.getMonth() + 1;
-      const newYear = nd.getYear();
-      handleSalaryMonthYearChange(newMonth, newYear, isoDate);
-    } else {
-      setSalaryPaymentDate(isoDate);
-    }
-  };
-
   // Handle salary calculation changes when bonus, deductions, base salary are edited in form
   useEffect(() => {
     const calculated = salaryBase - salaryDeductions + salaryBonus;
@@ -851,6 +845,8 @@ export const StaffManagement: React.FC = () => {
     try {
       if (editingSalaryRecord) {
         await updateSalary(editingSalaryRecord._id, {
+          month: Number(salaryModalMonth),
+          year: Number(salaryModalYear),
           bonus: Number(salaryBonus),
           deductions: Number(salaryDeductions),
           finalSalary: Number(salaryFinal),
@@ -1928,7 +1924,7 @@ export const StaffManagement: React.FC = () => {
                     <span className="font-bold text-foreground">
                       {
                         users
-                          .filter((u) => u.email !== "staff@ktmdecor.com")
+                          .filter((u) => u.role === "staff" && u.email !== "staff@ktmdecor.com" && u.email !== "admin@ktmdecor.com")
                           .filter((u) =>
                             !directorySearchQuery
                               ? true
@@ -1937,7 +1933,7 @@ export const StaffManagement: React.FC = () => {
                           ).length
                       }
                     </span>{" "}
-                    of {users.filter((u) => u.email !== "staff@ktmdecor.com").length} members
+                    of {users.filter((u) => u.role === "staff" && u.email !== "staff@ktmdecor.com" && u.email !== "admin@ktmdecor.com").length} members
                   </span>
 
                   <button
@@ -1954,7 +1950,7 @@ export const StaffManagement: React.FC = () => {
               {/* Staff Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {users
-                  .filter((u) => u.email !== "staff@ktmdecor.com")
+                  .filter((u) => u.role === "staff" && u.email !== "staff@ktmdecor.com" && u.email !== "admin@ktmdecor.com")
                   .filter((u) =>
                     !directorySearchQuery
                       ? true
@@ -2511,21 +2507,20 @@ export const StaffManagement: React.FC = () => {
                     <Calendar size={12} className="text-accent" />
                     <span>Salary Period (Month & Year)</span>
                   </label>
-                  <span className="text-[11px] font-bold text-accent">
-                    {months.find((m) => m.value === salaryModalMonth)?.name} {salaryModalYear} BS
+                  <span className="text-xs font-bold text-accent px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20">
+                    {months.find((m) => m.value === salaryModalMonth)?.name} ({months.find((m) => m.value === salaryModalMonth)?.nepaliName}) {salaryModalYear} BS
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
-                      Month
+                      Select Month (महिना)
                     </label>
                     <select
                       value={salaryModalMonth}
-                      disabled={!!editingSalaryRecord}
                       onChange={(e) => handleSalaryMonthYearChange(Number(e.target.value), salaryModalYear)}
-                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer"
                     >
                       {months.map((m) => (
                         <option key={m.value} value={m.value}>
@@ -2537,13 +2532,12 @@ export const StaffManagement: React.FC = () => {
 
                   <div className="space-y-1">
                     <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
-                      Year
+                      Select Year (साल)
                     </label>
                     <select
                       value={salaryModalYear}
-                      disabled={!!editingSalaryRecord}
                       onChange={(e) => handleSalaryMonthYearChange(salaryModalMonth, Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer"
                     >
                       {years.map((y) => (
                         <option key={y} value={y}>
@@ -2552,20 +2546,6 @@ export const StaffManagement: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                </div>
-
-                {/* Custom Specific Date (BS) */}
-                <div className="pt-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
-                      Custom Date / Reference Date (BS)
-                    </label>
-                    <span className="text-[10px] text-muted/70 italic">Syncs month & year</span>
-                  </div>
-                  <NepaliDatePicker
-                    value={salaryPaymentDate}
-                    onChange={(iso) => handleCustomDateChange(iso)}
-                  />
                 </div>
 
                 {/* Existing Salary Warning */}
@@ -2729,7 +2709,7 @@ export const StaffManagement: React.FC = () => {
                   </label>
                   <NepaliDatePicker
                     value={salaryPaymentDate}
-                    onChange={(iso) => handleCustomDateChange(iso)}
+                    onChange={(iso) => setSalaryPaymentDate(iso)}
                     required
                   />
                 </div>
