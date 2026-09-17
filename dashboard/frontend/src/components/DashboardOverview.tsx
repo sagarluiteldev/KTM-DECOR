@@ -209,8 +209,16 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
     }
   };
 
-  // Get list of active/completed orders with outstanding due payment > 0
-  const outstandingOrdersList = orders.filter((o) => o.duePayment > 0);
+  // Safe orders array
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
+  // Scoped orders strictly for the selected BS month/year
+  const scopedOrders = safeOrders.filter(
+    (o) => !o.deleted && isDateInSelectedPeriod(o.orderDate || o.createdAt)
+  );
+
+  // Get list of active/completed orders with outstanding due payment > 0 for the selected period
+  const outstandingOrdersList = scopedOrders.filter((o) => o.duePayment > 0);
 
   // Defensive guard: ensure quickNotes is always an array for rendering
   const safeQuickNotes = Array.isArray(quickNotes) ? quickNotes : [];
@@ -220,13 +228,16 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
     .filter((t) => t.status === "done")
     .sort((a, b) => new Date(a.updatedAt || a.createdAt).getTime() - new Date(b.updatedAt || b.createdAt).getTime());
 
-  // Approved manual orders
-  const approvedOrders = orders
+  // Approved manual orders for selected period
+  const scopedApprovedOrders = scopedOrders
     .filter((o) => o.approved && (o.stage === "delivered" || o.stage === "paid"))
     .sort((a, b) => new Date(a.approvedAt || a.updatedAt || a.createdAt).getTime() - new Date(b.approvedAt || b.updatedAt || b.createdAt).getTime());
 
-  // Active orders are those in design, manufacturing, or completed (not yet delivered or paid)
-  const activeOrdersCount = orders.filter((o) => !o.deleted && o.stage !== "delivered" && o.stage !== "paid").length;
+  // All-time approved orders for timeline reference if needed
+  const approvedOrders = scopedApprovedOrders;
+
+  // Active orders are those in design, manufacturing, or completed (not yet delivered or paid) in selected period
+  const activeOrdersCount = scopedOrders.filter((o) => o.stage !== "delivered" && o.stage !== "paid").length;
 
   // Dynamic Sales: Sum of total cost of completed tasks + sales ledger entries in active period
   const taskSales = completedTasks
@@ -237,7 +248,7 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   const safeSales = Array.isArray(sales) ? sales : [];
 
   // Map orders by ID for guaranteed accurate base price resolution
-  const ordersMap = new Map((Array.isArray(orders) ? orders : []).map((o) => [o._id.toString(), o]));
+  const ordersMap = new Map(safeOrders.map((o) => [o._id.toString(), o]));
 
   // Order sales strictly reflect product base price without delivery or fitting charges
   const orderSales = safeSales
@@ -271,16 +282,14 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   const totalSales = taskSales + orderSales + directSales;
 
   // Delivery and Fitting charges calculated from orders in active period
-  const totalDeliveryCharges = orders
-    .filter((o) => !o.deleted && isDateInSelectedPeriod(o.deliveryDate || o.orderDate || o.createdAt))
-    .reduce((acc, o) => acc + (o.deliveryPrice || 0), 0);
-  const totalFittingCharges = orders
-    .filter((o) => !o.deleted && isDateInSelectedPeriod(o.deliveryDate || o.orderDate || o.createdAt))
-    .reduce((acc, o) => acc + (o.installationPrice || 0), 0);
-  const totalDuePayment = orders.filter((o) => !o.deleted).reduce((acc, o) => acc + (o.duePayment || 0), 0);
+  const totalDeliveryCharges = scopedOrders.reduce((acc, o) => acc + (o.deliveryPrice || 0), 0);
+  const totalFittingCharges = scopedOrders.reduce((acc, o) => acc + (o.installationPrice || 0), 0);
+  const totalDuePayment = scopedOrders.reduce((acc, o) => acc + (o.duePayment || 0), 0);
 
   const pendingTasks = tasks.filter((t) => t.status !== "done");
+  const scopedPendingTasks = tasks.filter((t) => t.status !== "done" && isDateInSelectedPeriod(t.dueDate || t.createdAt));
   const completedTasksCount = completedTasks.filter((t) => isDateInSelectedPeriod(t.updatedAt || t.createdAt)).length;
+  const completedWorkCount = completedTasksCount + scopedApprovedOrders.length;
   const pinnedTasks = tasks.filter((t) => t.pinned && t.status !== "done");
 
   // Scoped calculations for Overview Cards
@@ -860,7 +869,7 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <span className="text-xs text-muted font-bold uppercase tracking-wider block">Completed Work</span>
-                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{completedTasksCount + approvedOrders.length}</h3>
+                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{completedWorkCount}</h3>
                 </div>
                 <div
                   style={{ background: "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)" }}
@@ -1120,13 +1129,13 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] text-muted uppercase font-bold tracking-wider block">Recent Invoices</span>
-                  {purchases.slice(0, 2).map((p) => (
+                  {scopedPurchases.slice(0, 2).map((p) => (
                     <div key={p._id} className="flex justify-between items-center text-[11px] py-0.5">
                       <span className="truncate max-w-[130px] font-medium text-foreground">{p.supplier}</span>
                       <span className="text-foreground font-bold">Rs. {p.amount.toLocaleString()}</span>
                     </div>
                   ))}
-                  {purchases.length === 0 && (
+                  {scopedPurchases.length === 0 && (
                     <span className="text-[11px] text-muted italic">No purchases logged</span>
                   )}
                 </div>
@@ -1809,6 +1818,277 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
                 >
                   {netProfitVal >= 0 ? "Operating Surplus" : "Operating Deficit"}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── OPERATIONAL & WORK METRICS (EXACT SAME UI) ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Active Orders Card (Crisp Porcelain Card) */}
+            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Active Orders</span>
+                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{activeOrdersCount}</h3>
+                </div>
+                <div
+                  style={{ background: "linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #1D4ED8 100%)" }}
+                  className="p-2.5 text-white rounded-2xl shadow-md shadow-blue-500/20 shrink-0"
+                >
+                  <Package size={18} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                    ↓ 4.8%
+                  </span>
+                  <span className="text-xs text-muted font-medium">vs last week</span>
+                </div>
+                {renderMiniBarChart(
+                  getSparklineData("orders"),
+                  theme === "dark"
+                    ? "fill-white hover:fill-white/90 transition-colors"
+                    : "fill-blue-500/80 hover:fill-blue-600 transition-colors"
+                )}
+              </div>
+            </div>
+
+            {/* Pending Tasks Card (Crisp Porcelain Card) */}
+            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Pending Tasks</span>
+                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{scopedPendingTasks.length}</h3>
+                </div>
+                <div
+                  style={{ background: "linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #D97706 100%)" }}
+                  className="p-2.5 text-white rounded-2xl shadow-md shadow-amber-500/20 shrink-0"
+                >
+                  <Clock size={18} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                    ↓ 15.2%
+                  </span>
+                  <span className="text-xs text-muted font-medium">vs yesterday</span>
+                </div>
+                {renderMiniLineChart(getSparklineData("tasks"), "#d97706", "amber-spark-monthly")}
+              </div>
+            </div>
+
+            {/* Completed Work Card (Crisp Porcelain Card) */}
+            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Completed Work</span>
+                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{completedWorkCount}</h3>
+                </div>
+                <div
+                  style={{ background: "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)" }}
+                  className="p-2.5 text-white rounded-2xl shadow-md shadow-emerald-500/20 shrink-0"
+                >
+                  <CheckCircle size={18} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                    ↑ 8.3%
+                  </span>
+                  <span className="text-xs text-muted font-medium">vs last week</span>
+                </div>
+                {renderMiniLineChart(getSparklineData("completed"), "#2563eb", "blue-spark-monthly")}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── CHARGES & OUTSTANDING RECEIVABLES (EXACT SAME UI) ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Total Delivery Charges */}
+            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Delivery Charges</span>
+                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-blue-600 dark:text-blue-400">Rs. {totalDeliveryCharges.toLocaleString()}</h3>
+                <p className="text-xs text-muted">Separate delivery fees (not in Total Sales)</p>
+              </div>
+              <div
+                style={{ background: "linear-gradient(135deg, #38BDF8 0%, #0284C7 50%, #0369A1 100%)" }}
+                className="p-3 text-white rounded-2xl shadow-md shadow-sky-500/20 shrink-0"
+              >
+                <Truck size={22} />
+              </div>
+            </div>
+
+            {/* Total Fitting Charges */}
+            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Fitting Charges</span>
+                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-purple-600 dark:text-purple-400">Rs. {totalFittingCharges.toLocaleString()}</h3>
+                <p className="text-xs text-muted">Separate installation fees (not in Total Sales)</p>
+              </div>
+              <div
+                style={{ background: "linear-gradient(135deg, #C084FC 0%, #9333EA 50%, #7E22CE 100%)" }}
+                className="p-3 text-white rounded-2xl shadow-md shadow-purple-500/20 shrink-0"
+              >
+                <Wrench size={22} />
+              </div>
+            </div>
+
+            {/* Outstanding Receivables */}
+            <div 
+              onClick={() => setShowOutstandingModal(true)}
+              className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between cursor-pointer hover:border-red-500/30 hover:bg-red-500/[0.01] group"
+            >
+              <div className="space-y-1">
+                <span className="text-xs text-muted font-bold uppercase tracking-wider block group-hover:text-red-500 transition-colors">Total Outstanding Due</span>
+                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-red-500">Rs. {totalDuePayment.toLocaleString()}</h3>
+                <p className="text-xs text-muted">Receivables remaining from active/completed orders (Click to view)</p>
+              </div>
+              <div
+                style={{ background: "linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%)" }}
+                className="p-3 text-white rounded-2xl shadow-md shadow-red-500/20 group-hover:scale-105 transition-transform shrink-0"
+              >
+                <Clock size={22} />
+              </div>
+            </div>
+          </div>
+
+          {/* ─── FINANCIAL BREAKDOWN CARDS (EXACT SAME UI) ─── */}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
+              {/* Net Operating Profit Card (Signature Card) */}
+              <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-muted uppercase tracking-wider block">Net Operating Profit</span>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        netProfitVal >= 0
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                          : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+                      }`}
+                    >
+                      {netProfitVal >= 0 ? "Surplus" : "Deficit"}
+                    </span>
+                  </div>
+                  <div className="mb-3">
+                    <h4
+                      className={`text-3xl sm:text-4xl font-semibold font-display leading-none ${
+                        netProfitVal >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      Rs. {netProfitVal.toLocaleString()}
+                    </h4>
+                  </div>
+                  <div className="space-y-1.5 text-[11px] font-medium text-muted">
+                    <div className="flex justify-between items-center">
+                      <span>Revenue:</span>
+                      <span className="font-bold text-foreground">Rs. {totalSales.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Expenses:</span>
+                      <span className="font-bold text-foreground">Rs. {totalExpensesVal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Purchases:</span>
+                      <span className="font-bold text-foreground">Rs. {totalPurchasesVal.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handlePreviewStatement("all")}
+                  className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Preview Statement</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+
+              {/* Expenses Overview Card (Porcelain White Card) */}
+              <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-muted uppercase tracking-wider block">Expenses Summary</span>
+                    <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
+                      Outflows
+                    </span>
+                  </div>
+                  <div className="mb-3">
+                    <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
+                      Rs. {totalExpensesVal.toLocaleString()}
+                    </h4>
+                    <span className="text-xs text-muted font-medium mt-1 block">Total operating expenditures</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-medium text-muted">
+                    <div className="flex justify-between">
+                      <span>Salary:</span>
+                      <span className="font-bold text-foreground">Rs. {expenseCategorySums.salary.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Rent:</span>
+                      <span className="font-bold text-foreground">Rs. {expenseCategorySums.rent.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Travel:</span>
+                      <span className="font-bold text-foreground">Rs. {expenseCategorySums.travel.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Food:</span>
+                      <span className="font-bold text-foreground">Rs. {expenseCategorySums.food.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCurrentTab("expenses")}
+                  className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View Expense Log</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+
+              {/* Purchases Tracker Card (Porcelain White Card) */}
+              <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-muted uppercase tracking-wider block">Purchases Tracker</span>
+                    <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
+                      {outstandingPurchasesVal > 0 ? "Pending Dues" : "Settled"}
+                    </span>
+                  </div>
+                  <div className="mb-3">
+                    <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
+                      Rs. {totalPurchasesVal.toLocaleString()}
+                    </h4>
+                    {outstandingPurchasesVal > 0 ? (
+                      <span className="text-xs text-red-500 font-bold mt-1 block">Rs. {outstandingPurchasesVal.toLocaleString()} pending dues</span>
+                    ) : (
+                      <span className="text-xs text-muted font-medium mt-1 block">All vendor bills settled</span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-muted uppercase font-bold tracking-wider block">Recent Invoices</span>
+                    {scopedPurchases.slice(0, 2).map((p) => (
+                      <div key={p._id} className="flex justify-between items-center text-[11px] py-0.5">
+                        <span className="truncate max-w-[130px] font-medium text-foreground">{p.supplier}</span>
+                        <span className="text-foreground font-bold">Rs. {p.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {scopedPurchases.length === 0 && (
+                      <span className="text-[11px] text-muted italic">No purchases logged</span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCurrentTab("purchase")}
+                  className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View Purchases Tracker</span>
+                  <span>&rarr;</span>
+                </button>
               </div>
             </div>
           </div>
