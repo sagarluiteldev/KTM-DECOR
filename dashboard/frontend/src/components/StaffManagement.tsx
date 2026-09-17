@@ -20,6 +20,7 @@ import {
   NEPALI_MONTHS,
   NEPALI_YEARS,
   NEPALI_DAYS,
+  toNepaliDate,
   getCurrentNepaliDate,
   getDaysInBsMonth,
   getFirstDayOfBsMonth,
@@ -96,6 +97,8 @@ export const StaffManagement: React.FC = () => {
   const [editingSalaryRecord, setEditingSalaryRecord] = useState<Salary | null>(null);
   const [salaryFormError, setSalaryFormError] = useState<string>("");
   const [salarySubmitting, setSalarySubmitting] = useState<boolean>(false);
+  const [salaryModalMonth, setSalaryModalMonth] = useState<number>(currentBs.month);
+  const [salaryModalYear, setSalaryModalYear] = useState<number>(currentBs.year);
 
   // Historical Salary Log Filter States
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
@@ -669,6 +672,11 @@ export const StaffManagement: React.FC = () => {
     setEditingSalaryRecord(null);
     setSelectedSalaryUser(staff);
     
+    const targetMonth = selectedMonth || currentBs.month;
+    const targetYear = selectedYear || currentBs.year;
+    setSalaryModalMonth(targetMonth);
+    setSalaryModalYear(targetYear);
+
     const stats = getUserMonthlyStats(staff._id);
     const base = staff.baseSalary || 30000;
     const dailyRate = base / (stats.totalWorkingDays || 30);
@@ -683,7 +691,10 @@ export const StaffManagement: React.FC = () => {
     setSalaryFinal(net);
     setSalaryStatus("pending");
     setSalaryPaymentMethod("cash");
-    setSalaryPaymentDate(new Date().toISOString().slice(0, 10));
+
+    const daysInTargetMonth = getDaysInBsMonth(targetYear, targetMonth);
+    const defaultAdDate = bsToAd(targetYear, targetMonth, Math.min(28, daysInTargetMonth));
+    setSalaryPaymentDate(defaultAdDate.toISOString().slice(0, 10));
     setSalaryNotes("");
     
     setShowSalaryModal(true);
@@ -695,6 +706,8 @@ export const StaffManagement: React.FC = () => {
     setEditingSalaryRecord(record);
     setSelectedSalaryUser(record.user);
     
+    setSalaryModalMonth(record.month);
+    setSalaryModalYear(record.year);
     setSalaryBase(record.baseSalary);
     setSalaryPresentDays(record.presentDays);
     setSalaryAbsentDays(record.absentDays);
@@ -707,6 +720,90 @@ export const StaffManagement: React.FC = () => {
     setSalaryNotes(record.notes || "");
     
     setShowSalaryModal(true);
+  };
+
+  // Handler for changing month and year inside the Process Monthly Salary modal
+  const handleSalaryMonthYearChange = async (newMonth: number, newYear: number, newIsoDate?: string) => {
+    setSalaryModalMonth(newMonth);
+    setSalaryModalYear(newYear);
+
+    const targetDate = newIsoDate || bsToAd(newYear, newMonth, Math.min(28, getDaysInBsMonth(newYear, newMonth))).toISOString().slice(0, 10);
+    setSalaryPaymentDate(targetDate);
+
+    // If creating a new salary record, auto-calculate stats for this employee and period
+    if (!editingSalaryRecord && selectedSalaryUser) {
+      const totalWorkingDays = getWorkingDaysInMonth(newYear, newMonth);
+      const base = salaryBase || selectedSalaryUser.baseSalary || 30000;
+
+      if (newMonth === selectedMonth && newYear === selectedYear) {
+        const stats = getUserMonthlyStats(selectedSalaryUser._id);
+        const dailyRate = base / (stats.totalWorkingDays || 30);
+        const calculatedDeductions = Math.round(stats.offDays * dailyRate);
+        const net = Math.max(0, Math.round(base - calculatedDeductions));
+
+        setSalaryPresentDays(stats.presentCredit);
+        setSalaryAbsentDays(stats.offDays);
+        setSalaryDeductions(calculatedDeductions);
+        setSalaryFinal(net);
+      } else {
+        try {
+          const { token } = useStore.getState();
+          const currentApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://localhost:5001");
+          const res = await fetch(`${currentApiUrl}/api/attendance?userId=${selectedSalaryUser._id}&month=${newMonth}&year=${newYear}`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          if (res.ok) {
+            const logs = await res.json();
+            if (Array.isArray(logs) && logs.length > 0) {
+              let present = 0;
+              let leaves = 0;
+              let absents = 0;
+              let halfDays = 0;
+
+              logs.forEach((log: any) => {
+                if (log.status === "present") present++;
+                else if (log.status === "leave") leaves++;
+                else if (log.status === "absent") absents++;
+                else if (log.status === "half_day") halfDays++;
+              });
+
+              const presentCredit = present + (halfDays * 0.5);
+              const offDays = absents + leaves + (halfDays * 0.5);
+              const dailyRate = base / (totalWorkingDays || 30);
+              const calculatedDeductions = Math.round(offDays * dailyRate);
+              const net = Math.max(0, Math.round(base - calculatedDeductions));
+
+              setSalaryPresentDays(presentCredit);
+              setSalaryAbsentDays(offDays);
+              setSalaryDeductions(calculatedDeductions);
+              setSalaryFinal(net);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("Failed to query month attendance:", err);
+        }
+
+        // Fallback: default to working days of that month with 0 deductions
+        setSalaryPresentDays(totalWorkingDays);
+        setSalaryAbsentDays(0);
+        setSalaryDeductions(0);
+        setSalaryFinal(base);
+      }
+    }
+  };
+
+  const handleCustomDateChange = (isoDate: string) => {
+    const nd = toNepaliDate(isoDate);
+    if (nd) {
+      const newMonth = nd.getMonth() + 1;
+      const newYear = nd.getYear();
+      handleSalaryMonthYearChange(newMonth, newYear, isoDate);
+    } else {
+      setSalaryPaymentDate(isoDate);
+    }
   };
 
   // Handle salary calculation changes when bonus, deductions, base salary are edited in form
@@ -741,8 +838,8 @@ export const StaffManagement: React.FC = () => {
       } else {
         await createSalary({
           user: selectedSalaryUser._id,
-          month: selectedMonth,
-          year: selectedYear,
+          month: Number(salaryModalMonth),
+          year: Number(salaryModalYear),
           baseSalary: Number(salaryBase),
           presentDays: Number(salaryPresentDays),
           absentDays: Number(salaryAbsentDays),
@@ -755,6 +852,10 @@ export const StaffManagement: React.FC = () => {
           paymentMethod: salaryStatus === "paid" ? salaryPaymentMethod : null,
           notes: salaryNotes
         });
+      }
+      if (salaryModalMonth !== selectedMonth || salaryModalYear !== selectedYear) {
+        setSelectedMonth(salaryModalMonth);
+        setSelectedYear(salaryModalYear);
       }
       setShowSalaryModal(false);
     } catch (err: any) {
@@ -2028,15 +2129,102 @@ export const StaffManagement: React.FC = () => {
               </h2>
             </div>
 
-            <div className="bg-muted/15 p-3.5 rounded-2xl border border-border/60 text-xs font-semibold space-y-1 mb-4">
-              <p><span className="text-muted">Staff Member:</span> <span className="font-bold text-foreground">{selectedSalaryUser.name}</span></p>
-              <p><span className="text-muted">Role:</span> <span className="font-bold text-foreground uppercase tracking-wide text-[10px]">{selectedSalaryUser.role}</span></p>
-              <p>
-                <span className="text-muted">Period:</span>{" "}
-                <span className="font-bold text-foreground">
-                  {months.find((m) => m.value === selectedMonth)?.name} {selectedYear}
+            <div className="bg-muted/15 p-4 rounded-2xl border border-border/60 text-xs font-semibold space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-muted block text-[10px] uppercase font-bold tracking-wider">Staff Member</span>
+                  <span className="font-bold text-sm text-foreground">{selectedSalaryUser.name}</span>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/20 font-bold uppercase tracking-wider text-[10px]">
+                  {selectedSalaryUser.role}
                 </span>
-              </p>
+              </div>
+
+              {/* Custom Salary Period (Month & Year) */}
+              <div className="pt-2.5 border-t border-border/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar size={12} className="text-accent" />
+                    <span>Salary Period (Month & Year)</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-accent">
+                    {months.find((m) => m.value === salaryModalMonth)?.name} {salaryModalYear} BS
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
+                      Month
+                    </label>
+                    <select
+                      value={salaryModalMonth}
+                      disabled={!!editingSalaryRecord}
+                      onChange={(e) => handleSalaryMonthYearChange(Number(e.target.value), salaryModalYear)}
+                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {months.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.name} ({m.nepaliName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
+                      Year
+                    </label>
+                    <select
+                      value={salaryModalYear}
+                      disabled={!!editingSalaryRecord}
+                      onChange={(e) => handleSalaryMonthYearChange(salaryModalMonth, Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-border/80 rounded-xl bg-card text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {years.map((y) => (
+                        <option key={y} value={y}>
+                          {y} BS
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Custom Specific Date (BS) */}
+                <div className="pt-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] text-muted font-bold uppercase tracking-wider">
+                      Custom Date / Reference Date (BS)
+                    </label>
+                    <span className="text-[10px] text-muted/70 italic">Syncs month & year</span>
+                  </div>
+                  <NepaliDatePicker
+                    value={salaryPaymentDate}
+                    onChange={(iso) => handleCustomDateChange(iso)}
+                  />
+                </div>
+
+                {/* Existing Salary Warning */}
+                {(() => {
+                  const existingRecord = !editingSalaryRecord && selectedSalaryUser
+                    ? salaries.find((s) => {
+                        const userId = s.user?._id || (s.user as any);
+                        return userId === selectedSalaryUser._id && s.month === salaryModalMonth && s.year === salaryModalYear;
+                      })
+                    : null;
+                  if (existingRecord) {
+                    return (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] font-semibold flex items-center gap-2 mt-1">
+                        <span className="shrink-0 text-sm">⚠️</span>
+                        <span>
+                          Salary for <strong>{months.find((m) => m.value === salaryModalMonth)?.name} {salaryModalYear}</strong> is already processed ({existingRecord.status.toUpperCase()}, Rs. {existingRecord.finalSalary.toLocaleString()}).
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
             </div>
 
             {salaryFormError && (
@@ -2177,7 +2365,7 @@ export const StaffManagement: React.FC = () => {
                   </label>
                   <NepaliDatePicker
                     value={salaryPaymentDate}
-                    onChange={(iso) => setSalaryPaymentDate(iso)}
+                    onChange={(iso) => handleCustomDateChange(iso)}
                     required
                   />
                 </div>

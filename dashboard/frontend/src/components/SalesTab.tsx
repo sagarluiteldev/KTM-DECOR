@@ -162,13 +162,19 @@ export const SalesTab: React.FC = () => {
         ? (Number(orderObj.price) || 0)
         : s.amount;
 
+    // Prioritize the order collected date (orderDate) chosen by the user when entering the order
+    const effectiveDate = (isOrder && orderObj?.orderDate)
+      ? orderObj.orderDate
+      : s.date;
+
     return {
       type: (isOrder ? "order" : "direct") as "order" | "direct",
       id: s._id,
       client: s.clientName,
       product: s.productName,
       amount: productPrice,
-      date: s.date,
+      date: effectiveDate,
+      entryDate: s.date,
       method: s.paymentMethod,
       notes: s.notes,
       orderObj: orderObj

@@ -41,12 +41,22 @@ export const RevenueGrowthChart: React.FC<RevenueGrowthChartProps> = ({
       }
     });
 
-    // Process sales
+    // Process sales (preferring order collected date)
     sales.forEach((s) => {
       const val = Number(s.amount) || 0;
       if (val > 0) {
+        const orderIdStr = (typeof s.orderId === "object" && s.orderId !== null)
+          ? (s.orderId as any)._id?.toString()
+          : s.orderId?.toString();
+        const matchedOrder = orderIdStr ? orders.find((o) => o._id?.toString() === orderIdStr) : undefined;
+        const effectiveDate = (matchedOrder && matchedOrder.orderDate)
+          ? matchedOrder.orderDate
+          : ((s.orderId && typeof s.orderId === "object" && (s.orderId as any).orderDate)
+            ? (s.orderId as any).orderDate
+            : s.date);
+
         items.push({
-          date: new Date(s.date),
+          date: new Date(effectiveDate),
           value: val,
         });
       }

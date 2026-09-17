@@ -185,13 +185,15 @@ async function syncOrderSale(order, userId) {
       const existingSale = await Sale.findOne({ orderId: order._id });
       // Total sales reflects product price only (excludes delivery & installation charges as requested)
       const productPrice = Number(order.price) || 0;
+      // Use the order collected date entered during order entry, falling back to createdAt or current time
+      const orderDateToUse = order.orderDate || order.createdAt || new Date();
 
       if (!existingSale) {
         const sale = new Sale({
           clientName: order.customerName,
           productName: order.productName,
           amount: productPrice,
-          date: order.createdAt || new Date(),
+          date: orderDateToUse,
           paymentMethod: order.paymentMethod || "cash",
           notes: order.manufacturingNotes || `Automatic sale from order: ${order.productName}`,
           createdBy: userId || order.createdBy,
@@ -206,6 +208,7 @@ async function syncOrderSale(order, userId) {
         existingSale.clientName = order.customerName;
         existingSale.productName = order.productName;
         existingSale.amount = productPrice;
+        existingSale.date = orderDateToUse;
         existingSale.paymentMethod = order.paymentMethod || "cash";
         existingSale.notes = order.manufacturingNotes || `Automatic sale from order: ${order.productName}`;
         await existingSale.save();
@@ -228,27 +231,38 @@ async function syncOrderSale(order, userId) {
   }
 }
 
-// Backfill and synchronize existing non-deleted orders into Sales with product price only
+// Backfill and synchronize existing non-deleted orders into Sales with product price only and order collected date
 async function backfillOrderSales() {
   try {
     const orders = await Order.find({ deleted: { $ne: true } });
     for (const order of orders) {
       const productPrice = Number(order.price) || 0;
+      const orderDateToUse = order.orderDate || order.createdAt || new Date();
       const existingSale = await Sale.findOne({ orderId: order._id });
       if (!existingSale) {
         await Sale.create({
           clientName: order.customerName,
           productName: order.productName,
           amount: productPrice,
-          date: order.createdAt || new Date(),
+          date: orderDateToUse,
           paymentMethod: order.paymentMethod || "cash",
           notes: order.manufacturingNotes || `Automatic sale from order: ${order.productName}`,
           createdBy: order.createdBy,
           orderId: order._id
         });
-      } else if (existingSale.amount !== productPrice) {
-        existingSale.amount = productPrice;
-        await existingSale.save();
+      } else {
+        let changed = false;
+        if (existingSale.amount !== productPrice) {
+          existingSale.amount = productPrice;
+          changed = true;
+        }
+        if (orderDateToUse && (!existingSale.date || new Date(existingSale.date).getTime() !== new Date(orderDateToUse).getTime())) {
+          existingSale.date = orderDateToUse;
+          changed = true;
+        }
+        if (changed) {
+          await existingSale.save();
+        }
       }
     }
   } catch (err) {
@@ -474,7 +488,7 @@ app.get("/api/bootstrap", protect, async (req, res) => {
 
     // 4. Inject admin-only data (with limits)
     if (userRole === "admin") {
-      promises.sales = Sale.find({}).populate("createdBy", "name role").populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status").sort({ date: -1 }).limit(500).lean();
+      promises.sales = Sale.find({}).populate("createdBy", "name role").populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status orderDate").sort({ date: -1 }).limit(500).lean();
       promises.expenses = Expense.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(500).lean();
       promises.purchases = Purchase.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(300).lean();
       promises.quotations = Quotation.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(200).lean();
@@ -1670,6 +1684,7 @@ app.post("/api/admin/resync-sales", protect, admin, async (req, res) => {
         if (deletedSale) deletedCount++;
       } else {
         const productPrice = Number(order.price) || 0;
+        const orderDateToUse = order.orderDate || order.createdAt || new Date();
         const existingSale = await Sale.findOne({ orderId: order._id });
 
         if (!existingSale) {
@@ -1677,17 +1692,27 @@ app.post("/api/admin/resync-sales", protect, admin, async (req, res) => {
             clientName: order.customerName,
             productName: order.productName,
             amount: productPrice,
-            date: order.createdAt || new Date(),
+            date: orderDateToUse,
             paymentMethod: order.paymentMethod || "cash",
             notes: order.manufacturingNotes || `Automatic sale from order: ${order.productName}`,
             createdBy: order.createdBy,
             orderId: order._id
           });
           createdCount++;
-        } else if (existingSale.amount !== productPrice) {
-          existingSale.amount = productPrice;
-          await existingSale.save();
-          updatedCount++;
+        } else {
+          let needsSave = false;
+          if (existingSale.amount !== productPrice) {
+            existingSale.amount = productPrice;
+            needsSave = true;
+          }
+          if (orderDateToUse && (!existingSale.date || new Date(existingSale.date).getTime() !== new Date(orderDateToUse).getTime())) {
+            existingSale.date = orderDateToUse;
+            needsSave = true;
+          }
+          if (needsSave) {
+            await existingSale.save();
+            updatedCount++;
+          }
         }
       }
     }
@@ -1697,7 +1722,7 @@ app.post("/api/admin/resync-sales", protect, admin, async (req, res) => {
 
     const refreshedSales = await Sale.find({})
       .populate("createdBy", "name role")
-      .populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status")
+      .populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status orderDate")
       .sort({ date: -1 })
       .lean();
 
@@ -1727,6 +1752,7 @@ app.get("/api/admin/resync-sales", protect, admin, async (req, res) => {
         if (deletedSale) deletedCount++;
       } else {
         const productPrice = Number(order.price) || 0;
+        const orderDateToUse = order.orderDate || order.createdAt || new Date();
         const existingSale = await Sale.findOne({ orderId: order._id });
 
         if (!existingSale) {
@@ -1734,17 +1760,27 @@ app.get("/api/admin/resync-sales", protect, admin, async (req, res) => {
             clientName: order.customerName,
             productName: order.productName,
             amount: productPrice,
-            date: order.createdAt || new Date(),
+            date: orderDateToUse,
             paymentMethod: order.paymentMethod || "cash",
             notes: order.manufacturingNotes || `Automatic sale from order: ${order.productName}`,
             createdBy: order.createdBy,
             orderId: order._id
           });
           createdCount++;
-        } else if (existingSale.amount !== productPrice) {
-          existingSale.amount = productPrice;
-          await existingSale.save();
-          updatedCount++;
+        } else {
+          let needsSave = false;
+          if (existingSale.amount !== productPrice) {
+            existingSale.amount = productPrice;
+            needsSave = true;
+          }
+          if (orderDateToUse && (!existingSale.date || new Date(existingSale.date).getTime() !== new Date(orderDateToUse).getTime())) {
+            existingSale.date = orderDateToUse;
+            needsSave = true;
+          }
+          if (needsSave) {
+            await existingSale.save();
+            updatedCount++;
+          }
         }
       }
     }
@@ -1753,7 +1789,7 @@ app.get("/api/admin/resync-sales", protect, admin, async (req, res) => {
 
     const refreshedSales = await Sale.find({})
       .populate("createdBy", "name role")
-      .populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status")
+      .populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status orderDate")
       .sort({ date: -1 })
       .lean();
 
