@@ -15,6 +15,7 @@ import {
   Edit2,
   Trash2
 } from "./ui/solar-icons";
+import { UserPlus, Users, AlertTriangle, Key, ShieldCheck, Search, Shield } from "lucide-react";
 import { NepaliDatePicker } from "./ui/NepaliDatePicker";
 import {
   NEPALI_MONTHS,
@@ -43,7 +44,10 @@ export const StaffManagement: React.FC = () => {
     deleteAttendance,
     createSalary,
     updateSalary,
-    deleteSalary
+    deleteSalary,
+    createUser,
+    updateUser,
+    deleteUser
   } = useStore();
 
   // Active staff member (supports direct login or shared staff login persona)
@@ -59,7 +63,7 @@ export const StaffManagement: React.FC = () => {
   const isAdmin = user?.role === "admin";
 
   // Tab State (for admin)
-  const [adminTab, setAdminTab] = useState<"payroll" | "calendar" | "bulk">("payroll");
+  const [adminTab, setAdminTab] = useState<"payroll" | "directory" | "calendar" | "bulk">("payroll");
 
   const currentBs = getCurrentNepaliDate();
 
@@ -111,6 +115,26 @@ export const StaffManagement: React.FC = () => {
   const [bulkStatusMap, setBulkStatusMap] = useState<Record<string, "present" | "absent" | "half_day" | "leave">>({});
   const [bulkNotesMap, setBulkNotesMap] = useState<Record<string, string>>({});
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string>("");
+
+  // User Management Modal & Form States
+  const [showUserModal, setShowUserModal] = useState<boolean>(false);
+  const [editingUser, setEditingUser] = useState<StoreUser | null>(null);
+  const [userFormName, setUserFormName] = useState<string>("");
+  const [userFormEmail, setUserFormEmail] = useState<string>("");
+  const [userFormRole, setUserFormRole] = useState<"staff" | "admin">("staff");
+  const [userFormBaseSalary, setUserFormBaseSalary] = useState<number | string>(25000);
+  const [userFormPassword, setUserFormPassword] = useState<string>("");
+  const [userFormError, setUserFormError] = useState<string>("");
+  const [userFormSubmitting, setUserFormSubmitting] = useState<boolean>(false);
+
+  // User Deletion Confirmation Modal States
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState<boolean>(false);
+  const [userToDelete, setUserToDelete] = useState<StoreUser | null>(null);
+  const [deleteUserError, setDeleteUserError] = useState<string>("");
+  const [deleteUserSubmitting, setDeleteUserSubmitting] = useState<boolean>(false);
+
+  // Directory Search Filter State
+  const [directorySearchQuery, setDirectorySearchQuery] = useState<string>("");
 
   // Year list in Bikram Sambat
   const years = NEPALI_YEARS;
@@ -889,6 +913,92 @@ export const StaffManagement: React.FC = () => {
     }
   };
 
+  // Staff Member Management Handlers
+  const openAddUserModal = () => {
+    setEditingUser(null);
+    setUserFormName("");
+    setUserFormEmail("");
+    setUserFormRole("staff");
+    setUserFormBaseSalary(25000);
+    setUserFormPassword("");
+    setUserFormError("");
+    setShowUserModal(true);
+  };
+
+  const openEditUserModal = (staffUser: StoreUser) => {
+    setEditingUser(staffUser);
+    setUserFormName(staffUser.name);
+    setUserFormEmail(staffUser.email);
+    setUserFormRole(staffUser.role || "staff");
+    setUserFormBaseSalary(staffUser.baseSalary || 30000);
+    setUserFormPassword("");
+    setUserFormError("");
+    setShowUserModal(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormName.trim()) {
+      setUserFormError("Staff member name is required.");
+      return;
+    }
+    if (!userFormEmail.trim()) {
+      setUserFormError("Staff email address is required.");
+      return;
+    }
+
+    setUserFormSubmitting(true);
+    setUserFormError("");
+    try {
+      const salaryNum = Number(userFormBaseSalary);
+      const parsedSalary = isNaN(salaryNum) ? 30000 : Math.max(0, salaryNum);
+
+      if (editingUser) {
+        await updateUser(editingUser._id, {
+          name: userFormName.trim(),
+          email: userFormEmail.trim().toLowerCase(),
+          role: userFormRole,
+          baseSalary: parsedSalary,
+          ...(userFormPassword.trim() ? { password: userFormPassword.trim() } : {}),
+        });
+      } else {
+        await createUser({
+          name: userFormName.trim(),
+          email: userFormEmail.trim().toLowerCase(),
+          role: userFormRole,
+          baseSalary: parsedSalary,
+          password: userFormPassword.trim() || undefined,
+        });
+      }
+      setShowUserModal(false);
+    } catch (err: any) {
+      setUserFormError(err.message || "Failed to save staff member.");
+    } finally {
+      setUserFormSubmitting(false);
+    }
+  };
+
+  const openDeleteUserModal = (staffUser: StoreUser) => {
+    setUserToDelete(staffUser);
+    setDeleteUserError("");
+    setShowDeleteUserModal(true);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeleteUserSubmitting(true);
+    setDeleteUserError("");
+    try {
+      await deleteUser(userToDelete._id);
+      setShowDeleteUserModal(false);
+      setUserToDelete(null);
+    } catch (err: any) {
+      setDeleteUserError(err.message || "Failed to remove staff member.");
+    } finally {
+      setDeleteUserSubmitting(false);
+    }
+  };
+
   const staffList = users.filter(u => u.role === "staff" && u.email !== "staff@ktmdecor.com");
   const selectedStaffUser = users.find(u => u._id === selectedAdminStaffId);
 
@@ -917,39 +1027,62 @@ export const StaffManagement: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Admin Navigation Tabs */}
         {isAdmin ? (
-          <div className="flex flex-wrap items-center gap-1.5 bg-muted/20 border border-border/80 p-1 rounded-xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 bg-muted/20 border border-border/80 p-1 rounded-xl">
+              <button
+                onClick={() => setAdminTab("payroll")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  adminTab === "payroll"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                <DollarSign size={15} />
+                <span>Payroll & Roster</span>
+              </button>
+              <button
+                onClick={() => setAdminTab("directory")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  adminTab === "directory"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                <Users size={15} />
+                <span>Staff Directory</span>
+              </button>
+              <button
+                onClick={() => setAdminTab("calendar")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  adminTab === "calendar"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                <Calendar size={15} />
+                <span>Staff Calendars</span>
+              </button>
+              <button
+                onClick={() => setAdminTab("bulk")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  adminTab === "bulk"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                <PlusCircle size={15} />
+                <span>Bulk Attendance</span>
+              </button>
+            </div>
+
             <button
-              onClick={() => setAdminTab("payroll")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                adminTab === "payroll"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted hover:text-foreground"
-              }`}
+              onClick={openAddUserModal}
+              style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)" }}
+              className="px-3.5 py-2 rounded-xl text-black text-xs font-bold transition-all shadow-md shadow-orange-500/15 flex items-center gap-1.5 hover:opacity-95 cursor-pointer shrink-0"
+              title="Add New Staff Member"
             >
-              <DollarSign size={15} />
-              <span>Payroll & Roster</span>
-            </button>
-            <button
-              onClick={() => setAdminTab("calendar")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                adminTab === "calendar"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              <Calendar size={15} />
-              <span>Staff Calendars</span>
-            </button>
-            <button
-              onClick={() => setAdminTab("bulk")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                adminTab === "bulk"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              <PlusCircle size={15} />
-              <span>Bulk Attendance</span>
+              <UserPlus size={15} />
+              <span>Add Staff</span>
             </button>
           </div>
         ) : (
@@ -1297,33 +1430,42 @@ export const StaffManagement: React.FC = () => {
                   <h3 className="font-bold text-base font-display text-foreground">
                     Staff Attendance & Salary Calculations
                   </h3>
-                  <button
-                    onClick={() => {
-                      // Simple simulated export
-                      const headers = "Staff Name,Email,Base Salary,Present Days,Absent Days,Working Days %,Calculated Payout\n";
-                      const rows = staffList.map(s => {
-                        const stats = getUserMonthlyStats(s._id);
-                        const baseSalary = s.baseSalary || 30000;
-                        const dailyRate = baseSalary / stats.totalWorkingDays;
-                        const finalSalary = Math.round(baseSalary - (stats.offDays * dailyRate));
-                        return `"${s.name}","${s.email}",${baseSalary},${stats.presentCredit},${stats.offDays},${stats.workingDaysPercent.toFixed(1)}%,${finalSalary}`;
-                      }).join("\n");
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={openAddUserModal}
+                      style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)" }}
+                      className="px-3.5 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/15 flex items-center gap-1.5 hover:opacity-95 cursor-pointer shrink-0"
+                    >
+                      <UserPlus size={14} />
+                      <span>Add Staff</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Simple simulated export
+                        const headers = "Staff Name,Email,Base Salary,Present Days,Absent Days,Working Days %,Calculated Payout\n";
+                        const rows = staffList.map(s => {
+                          const stats = getUserMonthlyStats(s._id);
+                          const baseSalary = s.baseSalary || 30000;
+                          const dailyRate = baseSalary / stats.totalWorkingDays;
+                          const finalSalary = Math.round(baseSalary - (stats.offDays * dailyRate));
+                          return `"${s.name}","${s.email}",${baseSalary},${stats.presentCredit},${stats.offDays},${stats.workingDaysPercent.toFixed(1)}%,${finalSalary}`;
+                        }).join("\n");
 
-                      const blob = new Blob([headers + rows], { type: "text/csv" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `Payroll_Report_${selectedMonth}_${selectedYear}.csv`;
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                    }}
-                    style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)" }}
-                    className="px-4 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/15 flex items-center gap-2 hover:opacity-95 cursor-pointer"
-                  >
-                    <FileText size={14} />
-                    Export CSV Statement
-                  </button>
+                        const blob = new Blob([headers + rows], { type: "text/csv" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `Payroll_Report_${selectedMonth}_${selectedYear}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                      }}
+                      className="px-4 py-2 border border-border/80 bg-muted/20 hover:bg-muted/30 text-foreground rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <FileText size={14} />
+                      <span>Export CSV</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -1453,6 +1595,22 @@ export const StaffManagement: React.FC = () => {
                                 >
                                   Calendar
                                 </button>
+                                <button
+                                  onClick={() => openEditUserModal(s)}
+                                  className="p-1.5 hover:bg-muted/20 text-muted hover:text-foreground rounded-xl transition-all"
+                                  title="Edit Staff Member"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                {s.email !== "admin@ktmdecor.com" && s.email !== "staff@ktmdecor.com" && s._id !== user?._id && (
+                                  <button
+                                    onClick={() => openDeleteUserModal(s)}
+                                    className="p-1.5 hover:bg-red-500/10 text-red-500/70 hover:text-red-500 rounded-xl transition-all"
+                                    title="Remove Staff Member"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1735,6 +1893,212 @@ export const StaffManagement: React.FC = () => {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: STAFF DIRECTORY */}
+          {adminTab === "directory" && (
+            <div className="space-y-6">
+              {/* Directory Top Bar */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 sm:p-6 rounded-[28px] border border-border/80 shadow-xs">
+                <div className="relative flex-1 w-full max-w-md">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={16} />
+                  <input
+                    type="text"
+                    value={directorySearchQuery}
+                    onChange={(e) => setDirectorySearchQuery(e.target.value)}
+                    placeholder="Search staff by name or email..."
+                    className="w-full pl-10 pr-4 py-2 bg-muted/20 border border-border/60 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                  {directorySearchQuery && (
+                    <button
+                      onClick={() => setDirectorySearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground p-1"
+                      title="Clear search"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                  <span className="text-xs text-muted font-medium">
+                    Showing{" "}
+                    <span className="font-bold text-foreground">
+                      {
+                        users
+                          .filter((u) => u.email !== "staff@ktmdecor.com")
+                          .filter((u) =>
+                            !directorySearchQuery
+                              ? true
+                              : u.name.toLowerCase().includes(directorySearchQuery.toLowerCase()) ||
+                                u.email.toLowerCase().includes(directorySearchQuery.toLowerCase())
+                          ).length
+                      }
+                    </span>{" "}
+                    of {users.filter((u) => u.email !== "staff@ktmdecor.com").length} members
+                  </span>
+
+                  <button
+                    onClick={openAddUserModal}
+                    style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)" }}
+                    className="px-4 py-2 rounded-xl text-black text-xs font-bold transition-all shadow-md shadow-orange-500/15 flex items-center gap-1.5 hover:opacity-95 cursor-pointer shrink-0"
+                  >
+                    <UserPlus size={15} />
+                    <span>Add Member</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Staff Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {users
+                  .filter((u) => u.email !== "staff@ktmdecor.com")
+                  .filter((u) =>
+                    !directorySearchQuery
+                      ? true
+                      : u.name.toLowerCase().includes(directorySearchQuery.toLowerCase()) ||
+                        u.email.toLowerCase().includes(directorySearchQuery.toLowerCase())
+                  )
+                  .map((staffMember) => {
+                    const stats = getUserMonthlyStats(staffMember._id);
+                    const isCurrentUser = user?._id === staffMember._id;
+                    const isProtected =
+                      isCurrentUser ||
+                      staffMember.email === "admin@ktmdecor.com" ||
+                      staffMember.email === "staff@ktmdecor.com";
+
+                    // Initials for avatar
+                    const initials = staffMember.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase();
+
+                    return (
+                      <div
+                        key={staffMember._id}
+                        className="p-5 sm:p-6 rounded-[28px] border border-border/80 bg-card shadow-xs flex flex-col justify-between hover:border-border transition-all duration-200 group"
+                      >
+                        <div>
+                          {/* Header: Avatar, Name, Role, Actions */}
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent/20 to-orange-500/10 border border-accent/30 flex items-center justify-center font-black text-base text-accent shrink-0 shadow-2xs">
+                                {initials || "ST"}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-bold text-sm text-foreground leading-snug">
+                                    {staffMember.name}
+                                  </h3>
+                                  {isCurrentUser && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-accent/15 text-accent font-bold">
+                                      You
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                      staffMember.role === "admin"
+                                        ? "bg-purple-500/10 border-purple-500/30 text-purple-500"
+                                        : "bg-blue-500/10 border-blue-500/30 text-blue-500"
+                                    }`}
+                                  >
+                                    {staffMember.role === "admin" ? <Shield size={10} /> : <UserIcon size={10} />}
+                                    {staffMember.role}
+                                  </span>
+                                  <span className="text-xs text-muted truncate max-w-[150px] sm:max-w-[180px]">
+                                    {staffMember.email}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quick edit / delete buttons */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEditUserModal(staffMember)}
+                                className="p-1.5 rounded-xl hover:bg-muted/20 text-muted hover:text-foreground transition-all"
+                                title="Edit Staff Member"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              {!isProtected && (
+                                <button
+                                  onClick={() => openDeleteUserModal(staffMember)}
+                                  className="p-1.5 rounded-xl hover:bg-red-500/10 text-muted hover:text-red-500 transition-all"
+                                  title="Remove Staff Member"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Base Salary & Stats Bar */}
+                          <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-muted/15 border border-border/50 mb-4">
+                            <div>
+                              <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Base Salary</p>
+                              <p className="text-xs font-black text-foreground mt-0.5">
+                                Rs. {(staffMember.baseSalary || 25000).toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                                {months.find((m) => m.value === selectedMonth)?.name || "Month"} Attendance
+                              </p>
+                              <p className="text-xs font-black text-foreground mt-0.5">
+                                {stats.presentCredit} / {stats.totalWorkingDays} days ({Math.round(stats.workingDaysPercent)}%)
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Monthly Status Pills */}
+                          <div className="flex items-center gap-2 mb-4 text-[11px] font-bold">
+                            <span className="px-2 py-0.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                              {stats.presentCount} Present
+                            </span>
+                            <span className="px-2 py-0.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                              {stats.absentCount} Absent
+                            </span>
+                            <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                              {stats.leaveCount} Leave
+                            </span>
+                            {stats.halfDayCount > 0 && (
+                              <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                                {stats.halfDayCount} Half-day
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom Actions */}
+                        <div className="flex items-center gap-2 pt-3 border-t border-border/60">
+                          <button
+                            onClick={() => {
+                              setSelectedAdminStaffId(staffMember._id);
+                              setAdminTab("calendar");
+                            }}
+                            className="flex-1 py-2 px-3 rounded-xl border border-border/80 bg-card hover:bg-muted/20 text-xs font-bold text-foreground transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <Calendar size={13} />
+                            <span>Calendar</span>
+                          </button>
+                          <button
+                            onClick={() => openCreateSalaryModal(staffMember)}
+                            className="flex-1 py-2 px-3 rounded-xl border border-accent/30 bg-accent/10 hover:bg-accent/20 text-xs font-bold text-accent transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <DollarSign size={13} />
+                            <span>Pay Salary</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -2415,6 +2779,204 @@ export const StaffManagement: React.FC = () => {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD / EDIT STAFF MEMBER MODAL */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border/80 rounded-[32px] max-w-md w-full p-6 sm:p-7 shadow-2xl relative">
+            <div className="flex justify-between items-start mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-accent/20 to-orange-500/10 border border-accent/30 flex items-center justify-center text-accent">
+                  {editingUser ? <Edit2 size={18} /> : <UserPlus size={18} />}
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-foreground">
+                    {editingUser ? "Edit Staff Member" : "Add New Staff Member"}
+                  </h3>
+                  <p className="text-xs text-muted">
+                    {editingUser
+                      ? "Update profile details, role, and base salary"
+                      : "Create a new staff profile for roster & attendance"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="p-1.5 rounded-full hover:bg-muted/20 text-muted transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {userFormError && (
+              <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle size={15} className="shrink-0" />
+                <span>{userFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={userFormName}
+                  onChange={(e) => setUserFormName(e.target.value)}
+                  placeholder="e.g. Ramesh Shrestha"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={userFormEmail}
+                  onChange={(e) => setUserFormEmail(e.target.value)}
+                  placeholder="e.g. ramesh@ktmdecor.com"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider">
+                    Role
+                  </label>
+                  <select
+                    value={userFormRole}
+                    onChange={(e) => setUserFormRole(e.target.value as "staff" | "admin")}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent/40 cursor-pointer"
+                  >
+                    <option value="staff" className="bg-card">Staff</option>
+                    <option value="admin" className="bg-card">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider">
+                    Base Salary (NPR)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="500"
+                    value={userFormBaseSalary}
+                    onChange={(e) => setUserFormBaseSalary(e.target.value)}
+                    placeholder="25000"
+                    className="w-full px-3 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                  <span>{editingUser ? "Change Password (Optional)" : "Password (Optional)"}</span>
+                  {editingUser && <span className="text-[10px] text-muted normal-case font-normal">Leave blank to keep current</span>}
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={14} />
+                  <input
+                    type="password"
+                    value={userFormPassword}
+                    onChange={(e) => setUserFormPassword(e.target.value)}
+                    placeholder={editingUser ? "••••••••" : "Default: Staff@123"}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                </div>
+                {!editingUser && (
+                  <p className="text-[10px] text-muted mt-1">
+                    If left blank, initial password will be set to <span className="font-bold text-foreground">Staff@123</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setShowUserModal(false)}
+                  className="px-4 py-2 border border-border/80 bg-card rounded-xl text-xs font-bold hover:bg-muted/20 transition-all text-muted cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={userFormSubmitting}
+                  style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)" }}
+                  className="px-5 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/15 hover:opacity-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {userFormSubmitting ? "Saving..." : editingUser ? "Update Staff" : "Add Staff Member"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STAFF CONFIRMATION MODAL */}
+      {showDeleteUserModal && userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-red-500/30 rounded-[32px] max-w-md w-full p-6 sm:p-7 shadow-2xl relative">
+            <div className="flex items-center gap-3.5 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500 shrink-0">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground">Remove Staff Member</h3>
+                <p className="text-xs text-muted">This action is permanent and irreversible</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-xs text-foreground/90 leading-relaxed">
+                Are you sure you want to remove <span className="font-extrabold text-foreground">{userToDelete.name}</span> (<span className="font-mono text-muted">{userToDelete.email}</span>)?
+              </p>
+              <div className="p-3 rounded-2xl bg-muted/20 border border-border/60 text-[11px] text-muted space-y-1">
+                <p className="flex items-center gap-1.5 font-bold text-foreground">
+                  <ShieldCheck size={13} className="text-green-500 shrink-0" />
+                  <span>Historical Record Protection</span>
+                </p>
+                <p>All past attendance records and paid salary history will remain safely preserved in the database for accounting audits.</p>
+              </div>
+            </div>
+
+            {deleteUserError && (
+              <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle size={15} className="shrink-0" />
+                <span>{deleteUserError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
+              <button
+                type="button"
+                disabled={deleteUserSubmitting}
+                onClick={() => {
+                  setShowDeleteUserModal(false);
+                  setUserToDelete(null);
+                }}
+                className="px-4 py-2 border border-border/80 bg-card rounded-xl text-xs font-bold hover:bg-muted/20 transition-all text-muted cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteUserSubmitting}
+                onClick={handleConfirmDeleteUser}
+                className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-red-500/20 disabled:opacity-50 cursor-pointer"
+              >
+                {deleteUserSubmitting ? "Removing..." : "Yes, Remove Member"}
+              </button>
+            </div>
           </div>
         </div>
       )}

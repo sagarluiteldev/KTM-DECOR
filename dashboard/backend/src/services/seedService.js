@@ -98,20 +98,6 @@ export const seedUsers = async () => {
       ...staffMembers.map(s => s.email)
     ];
 
-    // Clean up any legacy staff users not in our seeded 10 staff list or shared staff login
-    const legacyStaff = await User.find({ role: "staff", email: { $nin: allowedEmails } });
-    if (legacyStaff.length > 0) {
-      const legacyIds = legacyStaff.map(u => u._id);
-      const db = mongoose.connection.db;
-      await db.collection("attendances").deleteMany({ user: { $in: legacyIds } });
-      await db.collection("salaries").deleteMany({ user: { $in: legacyIds } });
-      await db.collection("tasks").deleteMany({ assignee: { $in: legacyIds } });
-      await db.collection("notifications").deleteMany({ user: { $in: legacyIds } });
-      await db.collection("quicknotes").deleteMany({ user: { $in: legacyIds } });
-      await User.deleteMany({ _id: { $in: legacyIds } });
-      console.log(`  ↳ Cleaned up ${legacyStaff.length} legacy staff members and their associated logs.`);
-    }
-
     for (const staff of staffMembers) {
       const exists = await User.findOne({ email: staff.email });
       if (!exists) {
@@ -124,7 +110,7 @@ export const seedUsers = async () => {
         });
         console.log(`  ↳ Created staff member: ${staff.name}`);
       } else {
-        if (exists.baseSalary === undefined || exists.baseSalary !== staff.baseSalary) {
+        if (exists.baseSalary === undefined || exists.baseSalary === null) {
           exists.baseSalary = staff.baseSalary;
           await exists.save();
         }

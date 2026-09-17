@@ -642,6 +642,159 @@ app.get("/api/auth/users", protect, async (req, res) => {
   }
 });
 
+// Alias GET /api/users
+app.get("/api/users", protect, async (req, res) => {
+  try {
+    const users = await User.find({}).select("name email role baseSalary createdAt").lean();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create new staff member (Admin only)
+app.post("/api/users", protect, admin, async (req, res) => {
+  try {
+    const { name, email, password, role, baseSalary } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "Staff name is required" });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: "Email address is required" });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await User.findOne({ email: normalizedEmail });
+    if (existing) {
+      return res.status(400).json({ message: "A user with this email already exists" });
+    }
+
+    const assignedRole = role === "admin" ? "admin" : "staff";
+    const salaryNumber = Number(baseSalary);
+    const userSalary = (!isNaN(salaryNumber) && salaryNumber >= 0) ? salaryNumber : 30000;
+    const initialPassword = password && password.trim().length >= 6 ? password.trim() : (process.env.SEED_STAFF_PASSWORD || "ktmstaff2083");
+
+    const newUser = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: initialPassword,
+      role: assignedRole,
+      baseSalary: userSalary
+    });
+
+    const userResponse = {
+      _id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      baseSalary: newUser.baseSalary,
+      createdAt: newUser.createdAt
+    };
+
+    triggerPusher("user_created", userResponse);
+    await cacheDeletePattern("bootstrap:*");
+    await logActivity(req.user._id, "Staff Member Created", `Added staff member: "${newUser.name}" (${newUser.role}, Rs. ${userSalary.toLocaleString()})`);
+
+    res.status(201).json(userResponse);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update staff member profile (Admin only)
+app.put("/api/users/:id", protect, admin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, password, role, baseSalary } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (email && email.trim()) {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        const emailTaken = await User.findOne({ email: normalizedEmail, _id: { $ne: id } });
+        if (emailTaken) {
+          return res.status(400).json({ message: "This email address is already in use by another user" });
+        }
+        user.email = normalizedEmail;
+      }
+    }
+
+    if (name && name.trim()) user.name = name.trim();
+    if (role && (role === "admin" || role === "staff")) {
+      // Protect primary admin from demotion
+      if (user.email === "admin@ktmdecor.com" && role !== "admin") {
+        return res.status(400).json({ message: "Cannot change role of primary admin account" });
+      }
+      user.role = role;
+    }
+
+    if (baseSalary !== undefined && baseSalary !== null) {
+      const salaryNumber = Number(baseSalary);
+      if (!isNaN(salaryNumber) && salaryNumber >= 0) {
+        user.baseSalary = salaryNumber;
+      }
+    }
+
+    if (password && password.trim().length >= 6) {
+      user.password = password.trim();
+    }
+
+    await user.save();
+
+    const userResponse = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      baseSalary: user.baseSalary,
+      createdAt: user.createdAt
+    };
+
+    triggerPusher("user_updated", userResponse);
+    await cacheDeletePattern("bootstrap:*");
+    await logActivity(req.user._id, "Staff Member Updated", `Updated staff profile for "${user.name}"`);
+
+    res.json(userResponse);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete staff member (Admin only)
+app.delete("/api/users/:id", protect, admin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Critical Safeguards
+    if (req.user._id.toString() === id) {
+      return res.status(400).json({ message: "You cannot delete your own logged-in account" });
+    }
+    if (user.email === "admin@ktmdecor.com") {
+      return res.status(400).json({ message: "The primary admin account cannot be deleted" });
+    }
+    if (user.email === SHARED_STAFF_EMAIL) {
+      return res.status(400).json({ message: "The shared staff system account cannot be deleted" });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    triggerPusher("user_deleted", id);
+    await cacheDeletePattern("bootstrap:*");
+    await logActivity(req.user._id, "Staff Member Removed", `Removed staff member: "${user.name}" (${user.email})`);
+
+    res.json({ message: "Staff member deleted successfully", id });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // ─── TASKS ENDPOINTS ─────────────────────────────────────────
 
 // Get all tasks (Admin sees all, Staff sees their own)

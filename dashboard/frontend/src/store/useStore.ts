@@ -322,6 +322,9 @@ interface DashboardState {
   
   // Users
   fetchUsers: () => Promise<void>;
+  createUser: (userData: { name: string; email: string; password?: string; role?: "admin" | "staff"; baseSalary?: number }) => Promise<User>;
+  updateUser: (id: string, userData: { name?: string; email?: string; password?: string; role?: "admin" | "staff"; baseSalary?: number }) => Promise<User>;
+  deleteUser: (id: string) => Promise<void>;
   
   // Notifications
   fetchNotifications: () => Promise<void>;
@@ -800,6 +803,30 @@ export const useStore = create<DashboardState>()(
         }));
       });
 
+      channel.bind("user_created", (newUser: User) => {
+        set((state) => {
+          const exists = state.users.some((u) => u._id === newUser._id);
+          if (exists) return state;
+          return { users: [...state.users, newUser] };
+        });
+      });
+
+      channel.bind("user_updated", (updatedUser: User) => {
+        set((state) => ({
+          users: state.users.map((u) => (u._id === updatedUser._id ? updatedUser : u)),
+          activeStaffProfile:
+            state.activeStaffProfile?._id === updatedUser._id ? updatedUser : state.activeStaffProfile,
+        }));
+      });
+
+      channel.bind("user_deleted", (deletedUserId: string) => {
+        set((state) => ({
+          users: state.users.filter((u) => u._id !== deletedUserId),
+          activeStaffProfile:
+            state.activeStaffProfile?._id === deletedUserId ? null : state.activeStaffProfile,
+        }));
+      });
+
       set({ pusher });
     }
   },
@@ -1010,6 +1037,62 @@ export const useStore = create<DashboardState>()(
     } catch (err) {
       console.error("Fetch users failed:", err);
     }
+  },
+
+  createUser: async (userData) => {
+    const { token } = get();
+    const res = await fetch(`${API_URL}/api/users`, {
+      method: "POST",
+      headers: getHeaders(token),
+      body: JSON.stringify(userData),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to create staff member");
+    }
+    const newUser = await res.json();
+    set((state) => {
+      const exists = state.users.some((u) => u._id === newUser._id);
+      return { users: exists ? state.users : [...state.users, newUser] };
+    });
+    return newUser;
+  },
+
+  updateUser: async (id, userData) => {
+    const { token } = get();
+    const res = await fetch(`${API_URL}/api/users/${id}`, {
+      method: "PUT",
+      headers: getHeaders(token),
+      body: JSON.stringify(userData),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to update staff member");
+    }
+    const updatedUser = await res.json();
+    set((state) => ({
+      users: state.users.map((u) => (u._id === id ? updatedUser : u)),
+      activeStaffProfile:
+        state.activeStaffProfile?._id === id ? updatedUser : state.activeStaffProfile,
+    }));
+    return updatedUser;
+  },
+
+  deleteUser: async (id) => {
+    const { token } = get();
+    const res = await fetch(`${API_URL}/api/users/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(token),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to delete staff member");
+    }
+    set((state) => ({
+      users: state.users.filter((u) => u._id !== id),
+      activeStaffProfile:
+        state.activeStaffProfile?._id === id ? null : state.activeStaffProfile,
+    }));
   },
 
   fetchNotifications: async () => {
