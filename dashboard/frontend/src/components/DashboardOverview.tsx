@@ -1657,307 +1657,176 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
             )}
           </div>
 
-          {/* ─── 4 BIG CARDS: ONLY SALES, EXPENSES, PURCHASES & NET PROFIT ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
-            {/* 1. SALES CARD (Signature Sunset Gradient Hero Card) */}
-            <div
-              className="relative rounded-[32px] p-6 sm:p-7 shadow-xl shadow-orange-500/10 overflow-hidden flex flex-col justify-between transition-all hover:scale-[1.01] group border border-orange-500/20 min-h-[250px]"
-              style={{
-                background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
-              }}
-            >
-              <div>
-                {/* Header Badge with White Dot as in reference screenshot */}
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-white/25 backdrop-blur-md text-black border border-black/15 shadow-2xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-white shadow-xs shrink-0" />
-                    Sales: Rs. {totalSales.toLocaleString()}
-                  </span>
-                  <div className="p-2.5 bg-black text-white rounded-2xl shadow-md shrink-0 group-hover:rotate-6 transition-transform">
-                    <DollarSign size={20} />
+          {/* ─── ROW 1: 4 MAIN STAT CARDS (SAME TO SAME AS GENERAL OVERVIEW) ─── */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Sales Card (Signature Sunset Gradient Hero Card) */}
+              <div
+                className="relative rounded-[28px] p-6 shadow-xl shadow-orange-500/10 overflow-hidden flex flex-col justify-between transition-all hover:scale-[1.01]"
+                style={{
+                  background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
+                }}
+              >
+                <div className="flex items-start justify-between relative z-10">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-black/85 uppercase tracking-wider block">Total Sales</span>
+                      <span className="text-[10px] font-bold text-black bg-black/20 px-2.5 py-0.5 rounded-full border border-black/25">Product Only</span>
+                    </div>
+                    <h3 className="text-3xl sm:text-4xl font-semibold font-display text-black leading-none mt-2">
+                      Rs. {totalSales.toLocaleString()}
+                    </h3>
+                  </div>
+                  <div className="p-2.5 bg-black text-white rounded-2xl shadow-md shrink-0">
+                    <DollarSign size={18} />
                   </div>
                 </div>
-
-                <span className="text-xs font-bold text-black/75 uppercase tracking-wider block">
-                  Total Sales (Inflow)
-                </span>
-                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-black leading-none mt-2">
-                  Rs. {totalSales.toLocaleString()}
-                </h3>
+                <div className="flex items-center justify-between mt-4 relative z-10">
+                  <span className="text-xs text-black/75 font-medium">Excl. delivery & fitting</span>
+                  {renderMiniBarChart(
+                    getSparklineData("sales"),
+                    theme === "dark"
+                      ? "fill-[#F4F4F5] hover:fill-white transition-colors"
+                      : "fill-black/70 hover:fill-black transition-colors"
+                  )}
+                </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-black/15 flex items-center justify-between">
-                <span className="text-xs text-black/80 font-semibold">
-                  {viewMode === "all_time" ? "Lifetime Sales" : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} Sales`}
-                </span>
-                <span className="text-[11px] font-bold text-black/75 bg-black/10 px-2.5 py-0.5 rounded-full">
-                  Excl. delivery/fitting
-                </span>
+              {/* Active Orders Card (Crisp Porcelain Card) */}
+              <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted font-bold uppercase tracking-wider block">Active Orders</span>
+                    <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{activeOrdersCount}</h3>
+                  </div>
+                  <div
+                    style={{ background: "linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #1D4ED8 100%)" }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shadow-blue-500/20 shrink-0"
+                  >
+                    <Package size={18} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                      ↓ 4.8%
+                    </span>
+                    <span className="text-xs text-muted font-medium">vs last week</span>
+                  </div>
+                  {renderMiniBarChart(
+                    getSparklineData("orders"),
+                    theme === "dark"
+                      ? "fill-white hover:fill-white/90 transition-colors"
+                      : "fill-blue-500/80 hover:fill-blue-600 transition-colors"
+                  )}
+                </div>
+              </div>
+
+              {/* Pending Tasks Card (Crisp Porcelain Card) */}
+              <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted font-bold uppercase tracking-wider block">Pending Tasks</span>
+                    <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{scopedPendingTasks.length}</h3>
+                  </div>
+                  <div
+                    style={{ background: "linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #D97706 100%)" }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shadow-amber-500/20 shrink-0"
+                  >
+                    <Clock size={18} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                      ↓ 15.2%
+                    </span>
+                    <span className="text-xs text-muted font-medium">vs yesterday</span>
+                  </div>
+                  {renderMiniLineChart(getSparklineData("tasks"), "#d97706", "amber-spark-monthly")}
+                </div>
+              </div>
+
+              {/* Completed Work Card (Crisp Porcelain Card) */}
+              <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted font-bold uppercase tracking-wider block">Completed Work</span>
+                    <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{completedWorkCount}</h3>
+                  </div>
+                  <div
+                    style={{ background: "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)" }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shadow-emerald-500/20 shrink-0"
+                  >
+                    <CheckCircle size={18} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                      ↑ 8.3%
+                    </span>
+                    <span className="text-xs text-muted font-medium">vs last week</span>
+                  </div>
+                  {renderMiniLineChart(getSparklineData("completed"), "#2563eb", "blue-spark-monthly")}
+                </div>
               </div>
             </div>
 
-            {/* 2. EXPENSES CARD (Crisp Porcelain White Card with Orange Accent) */}
-            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
-              <div>
-                {/* Header Badge with Orange Dot as in reference screenshot */}
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25 shadow-2xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
-                    Expenses: Rs. {totalExpensesVal.toLocaleString()}
-                  </span>
-                  <div
-                    style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}
-                    className="p-2.5 text-white rounded-2xl shadow-md shadow-orange-500/20 shrink-0 group-hover:rotate-6 transition-transform"
-                  >
-                    <ArrowUpRight size={20} />
-                  </div>
+            {/* ─── ROW 2: CHARGES & RECEIVABLES (SAME TO SAME AS GENERAL OVERVIEW) ─── */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Total Delivery Charges */}
+              <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Delivery Charges</span>
+                  <h3 className="text-2xl sm:text-3xl font-semibold font-display text-blue-600 dark:text-blue-400">Rs. {totalDeliveryCharges.toLocaleString()}</h3>
+                  <p className="text-xs text-muted">Separate delivery fees (not in Total Sales)</p>
                 </div>
-
-                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
-                  Total Operating Expenses
-                </span>
-                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-foreground leading-none mt-2">
-                  Rs. {totalExpensesVal.toLocaleString()}
-                </h3>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
-                <span className="text-xs text-muted font-medium">
-                  {scopedExpenses.length} expense logs
-                </span>
-                <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2.5 py-0.5 rounded-full border border-orange-500/20">
-                  Salaries, rent & bills
-                </span>
-              </div>
-            </div>
-
-            {/* 3. PURCHASES CARD (Crisp Porcelain White Card with Amber Accent) */}
-            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
-              <div>
-                {/* Header Badge with Amber Dot as in reference screenshot */}
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 shadow-2xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                    Purchases: Rs. {totalPurchasesVal.toLocaleString()}
-                  </span>
-                  <div
-                    style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}
-                    className="p-2.5 text-white rounded-2xl shadow-md shadow-amber-500/20 shrink-0 group-hover:rotate-6 transition-transform"
-                  >
-                    <Briefcase size={20} />
-                  </div>
-                </div>
-
-                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
-                  Raw Material Purchases
-                </span>
-                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-foreground leading-none mt-2">
-                  Rs. {totalPurchasesVal.toLocaleString()}
-                </h3>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
-                <span className="text-xs text-muted font-medium">
-                  {scopedPurchases.length} invoices
-                </span>
-                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                  {outstandingPurchasesVal > 0 ? `Rs. ${outstandingPurchasesVal.toLocaleString()} Due` : "Materials"}
-                </span>
-              </div>
-            </div>
-
-            {/* 4. NET PROFIT CARD (Signature Emerald Porcelain Card) */}
-            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
-              <div>
-                {/* Header Badge with Green Dot as in reference screenshot */}
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black shadow-2xs border ${
-                    netProfitVal >= 0
-                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25"
-                      : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25"
-                  }`}>
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${netProfitVal >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
-                    Net Profit: Rs. {netProfitVal.toLocaleString()}
-                  </span>
-                  <div
-                    style={{
-                      background: netProfitVal >= 0
-                        ? "linear-gradient(135deg, #10B981 0%, #059669 100%)"
-                        : "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
-                    }}
-                    className="p-2.5 text-white rounded-2xl shadow-md shrink-0 group-hover:rotate-6 transition-transform"
-                  >
-                    <TrendingUp size={20} />
-                  </div>
-                </div>
-
-                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
-                  Net Operating Profit
-                </span>
-                <h3
-                  className={`text-3xl sm:text-4xl font-extrabold font-display leading-none mt-2 ${
-                    netProfitVal >= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
+                <div
+                  style={{ background: "linear-gradient(135deg, #38BDF8 0%, #0284C7 50%, #0369A1 100%)" }}
+                  className="p-3 text-white rounded-2xl shadow-md shadow-sky-500/20 shrink-0"
                 >
-                  Rs. {netProfitVal.toLocaleString()}
-                </h3>
+                  <Truck size={22} />
+                </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
-                <span className="text-xs text-muted font-medium">
-                  {profitMarginVal}% margin
-                </span>
-                <span
-                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                    netProfitVal >= 0
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                      : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
-                  }`}
+              {/* Total Fitting Charges */}
+              <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Fitting Charges</span>
+                  <h3 className="text-2xl sm:text-3xl font-semibold font-display text-purple-600 dark:text-purple-400">Rs. {totalFittingCharges.toLocaleString()}</h3>
+                  <p className="text-xs text-muted">Separate installation fees (not in Total Sales)</p>
+                </div>
+                <div
+                  style={{ background: "linear-gradient(135deg, #C084FC 0%, #9333EA 50%, #7E22CE 100%)" }}
+                  className="p-3 text-white rounded-2xl shadow-md shadow-purple-500/20 shrink-0"
                 >
-                  {netProfitVal >= 0 ? "Operating Surplus" : "Operating Deficit"}
-                </span>
+                  <Wrench size={22} />
+                </div>
+              </div>
+
+              {/* Outstanding Receivables */}
+              <div 
+                onClick={() => setShowOutstandingModal(true)}
+                className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between cursor-pointer hover:border-red-500/30 hover:bg-red-500/[0.01] group"
+              >
+                <div className="space-y-1">
+                  <span className="text-xs text-muted font-bold uppercase tracking-wider block group-hover:text-red-500 transition-colors">Total Outstanding Due</span>
+                  <h3 className="text-2xl sm:text-3xl font-semibold font-display text-red-500">Rs. {totalDuePayment.toLocaleString()}</h3>
+                  <p className="text-xs text-muted">Receivables remaining from active/completed orders (Click to view)</p>
+                </div>
+                <div
+                  style={{ background: "linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%)" }}
+                  className="p-3 text-white rounded-2xl shadow-md shadow-red-500/20 group-hover:scale-105 transition-transform shrink-0"
+                >
+                  <Clock size={22} />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ─── OPERATIONAL & WORK METRICS (EXACT SAME UI) ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Active Orders Card (Crisp Porcelain Card) */}
-            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Active Orders</span>
-                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{activeOrdersCount}</h3>
-                </div>
-                <div
-                  style={{ background: "linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #1D4ED8 100%)" }}
-                  className="p-2.5 text-white rounded-2xl shadow-md shadow-blue-500/20 shrink-0"
-                >
-                  <Package size={18} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                    ↓ 4.8%
-                  </span>
-                  <span className="text-xs text-muted font-medium">vs last week</span>
-                </div>
-                {renderMiniBarChart(
-                  getSparklineData("orders"),
-                  theme === "dark"
-                    ? "fill-white hover:fill-white/90 transition-colors"
-                    : "fill-blue-500/80 hover:fill-blue-600 transition-colors"
-                )}
-              </div>
-            </div>
-
-            {/* Pending Tasks Card (Crisp Porcelain Card) */}
-            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Pending Tasks</span>
-                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{scopedPendingTasks.length}</h3>
-                </div>
-                <div
-                  style={{ background: "linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #D97706 100%)" }}
-                  className="p-2.5 text-white rounded-2xl shadow-md shadow-amber-500/20 shrink-0"
-                >
-                  <Clock size={18} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                    ↓ 15.2%
-                  </span>
-                  <span className="text-xs text-muted font-medium">vs yesterday</span>
-                </div>
-                {renderMiniLineChart(getSparklineData("tasks"), "#d97706", "amber-spark-monthly")}
-              </div>
-            </div>
-
-            {/* Completed Work Card (Crisp Porcelain Card) */}
-            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all rounded-[28px] p-6 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <span className="text-xs text-muted font-bold uppercase tracking-wider block">Completed Work</span>
-                  <h3 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none mt-2">{completedWorkCount}</h3>
-                </div>
-                <div
-                  style={{ background: "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)" }}
-                  className="p-2.5 text-white rounded-2xl shadow-md shadow-emerald-500/20 shrink-0"
-                >
-                  <CheckCircle size={18} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="bg-neutral-200 dark:bg-neutral-200 text-black dark:text-black border border-neutral-300 dark:border-neutral-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                    ↑ 8.3%
-                  </span>
-                  <span className="text-xs text-muted font-medium">vs last week</span>
-                </div>
-                {renderMiniLineChart(getSparklineData("completed"), "#2563eb", "blue-spark-monthly")}
-              </div>
-            </div>
-          </div>
-
-          {/* ─── CHARGES & OUTSTANDING RECEIVABLES (EXACT SAME UI) ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Total Delivery Charges */}
-            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Delivery Charges</span>
-                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-blue-600 dark:text-blue-400">Rs. {totalDeliveryCharges.toLocaleString()}</h3>
-                <p className="text-xs text-muted">Separate delivery fees (not in Total Sales)</p>
-              </div>
-              <div
-                style={{ background: "linear-gradient(135deg, #38BDF8 0%, #0284C7 50%, #0369A1 100%)" }}
-                className="p-3 text-white rounded-2xl shadow-md shadow-sky-500/20 shrink-0"
-              >
-                <Truck size={22} />
-              </div>
-            </div>
-
-            {/* Total Fitting Charges */}
-            <div className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-xs text-muted font-bold uppercase tracking-wider block">Total Fitting Charges</span>
-                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-purple-600 dark:text-purple-400">Rs. {totalFittingCharges.toLocaleString()}</h3>
-                <p className="text-xs text-muted">Separate installation fees (not in Total Sales)</p>
-              </div>
-              <div
-                style={{ background: "linear-gradient(135deg, #C084FC 0%, #9333EA 50%, #7E22CE 100%)" }}
-                className="p-3 text-white rounded-2xl shadow-md shadow-purple-500/20 shrink-0"
-              >
-                <Wrench size={22} />
-              </div>
-            </div>
-
-            {/* Outstanding Receivables */}
-            <div 
-              onClick={() => setShowOutstandingModal(true)}
-              className="bg-card border border-border/80 shadow-sm hover:shadow-md transition-all p-6 rounded-[28px] flex items-center justify-between cursor-pointer hover:border-red-500/30 hover:bg-red-500/[0.01] group"
-            >
-              <div className="space-y-1">
-                <span className="text-xs text-muted font-bold uppercase tracking-wider block group-hover:text-red-500 transition-colors">Total Outstanding Due</span>
-                <h3 className="text-2xl sm:text-3xl font-semibold font-display text-red-500">Rs. {totalDuePayment.toLocaleString()}</h3>
-                <p className="text-xs text-muted">Receivables remaining from active/completed orders (Click to view)</p>
-              </div>
-              <div
-                style={{ background: "linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%)" }}
-                className="p-3 text-white rounded-2xl shadow-md shadow-red-500/20 group-hover:scale-105 transition-transform shrink-0"
-              >
-                <Clock size={22} />
-              </div>
-            </div>
-          </div>
-
-          {/* ─── FINANCIAL BREAKDOWN CARDS (EXACT SAME UI) ─── */}
-          <div className="space-y-6">
+          {/* ─── ROW 3: FINANCIAL OVERVIEWS (SAME TO SAME AS GENERAL OVERVIEW) ─── */}
+          <div className="space-y-6 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
               {/* Net Operating Profit Card (Signature Card) */}
               <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
@@ -2092,120 +1961,6 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
               </div>
             </div>
           </div>
-
-          {/* NET OPERATING BALANCE EQUATION BANNER */}
-          <div className="bg-card border border-border/80 rounded-[28px] p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold">
-              <span className="px-3 py-1.5 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/25">
-                Sales: Rs. {totalSales.toLocaleString()}
-              </span>
-              <span className="text-muted font-black">−</span>
-              <span className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
-                Expenses: Rs. {totalExpensesVal.toLocaleString()}
-              </span>
-              <span className="text-muted font-black">−</span>
-              <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                Purchases: Rs. {totalPurchasesVal.toLocaleString()}
-              </span>
-              <span className="text-muted font-black">=</span>
-              <span
-                className={`px-3 py-1.5 rounded-xl border ${
-                  netProfitVal >= 0
-                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-                    : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30"
-                }`}
-              >
-                Net Profit: Rs. {netProfitVal.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 self-end md:self-auto">
-              <button
-                onClick={() => handlePreviewStatement("all")}
-                style={{
-                  background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer hover:opacity-95"
-              >
-                <Printer size={14} />
-                <span>Preview PDF Statement</span>
-              </button>
-              <button
-                onClick={() => handleExport("all")}
-                disabled={exportingType !== null}
-                className="py-2 px-3 rounded-xl border border-border bg-card hover:bg-muted/30 text-xs font-bold text-foreground transition-all flex items-center gap-1 cursor-pointer"
-                title="Download CSV Statement"
-              >
-                <Download size={14} />
-                <span>{exportingType === "all" ? "Exporting..." : "CSV"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Archived Monthly Combined Statements (if any) */}
-          {user?.role === "admin" && statementArchives.filter((a) => a.type === "all").length > 0 && (
-            <div className="bg-card border border-border/80 rounded-[28px] p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2 border-b border-border/60 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="p-2 rounded-xl text-black shadow-xs shrink-0"
-                    style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
-                  >
-                    <Calendar size={16} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Archived Monthly Combined Statements
-                    </h4>
-                    <p className="text-[11px] text-muted">Permanent historical records and downloadable monthly statement archives</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 self-start sm:self-auto">
-                  {statementArchives.filter((a) => a.type === "all").length} Records Saved
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                {statementArchives
-                  .filter((a) => a.type === "all")
-                  .map((archive) => (
-                    <div
-                      key={archive._id}
-                      className="flex items-center justify-between p-4 rounded-2xl border border-border/80 bg-background/50 hover:bg-background hover:border-orange-400/40 hover:shadow-md transition-all group"
-                    >
-                      <button
-                        onClick={() => handlePreviewArchive(archive._id)}
-                        className="flex items-center gap-3 min-w-0 text-left flex-1 cursor-pointer"
-                        title="Preview / Print PDF"
-                      >
-                        <div
-                          className="p-2.5 rounded-xl text-black shadow-xs group-hover:scale-105 transition-transform shrink-0"
-                          style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
-                        >
-                          <FileText size={15} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-foreground truncate group-hover:text-accent transition-colors">
-                            Combined Statement
-                          </p>
-                          <p className="text-[11px] text-muted font-medium mt-0.5">
-                            {formatArchiveStatementLabel(archive)}
-                          </p>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => downloadArchive(archive._id, archive.filename)}
-                        className="p-2 text-muted hover:text-black hover:bg-orange-500/10 rounded-xl transition-colors ml-2 cursor-pointer shrink-0"
-                        title="Download CSV file"
-                      >
-                        <Download size={15} />
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
