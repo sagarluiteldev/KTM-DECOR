@@ -21,7 +21,8 @@ import {
   Truck,
   Wrench,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LayoutDashboard
 } from "./ui/solar-icons";
 import { Printer, Download, History, ArrowUpRight, ArrowDownRight, Layers } from "lucide-react";
 import { OrderDetailModal } from "./OrderDetailModal";
@@ -98,10 +99,10 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   const [overviewChartType, setOverviewChartType] = useState<"revenue" | "dual">("dual");
 
   // Overview BS Month & Year Active Period Filtering (defaults strictly to current active BS month)
+  const [overviewSubTab, setOverviewSubTab] = useState<"general" | "monthly">("general");
   const [overviewMonth, setOverviewMonth] = useState<number>(currentBs.month);
   const [overviewYear, setOverviewYear] = useState<number>(currentBs.year);
   const [viewMode, setViewMode] = useState<"monthly" | "all_time">("monthly");
-  const [ledgerFilter, setLedgerFilter] = useState<"all" | "sale" | "expense" | "purchase">("all");
 
   const lastBsMonth = currentBs.month === 1 ? 12 : currentBs.month - 1;
   const lastBsYear = currentBs.month === 1 ? currentBs.year - 1 : currentBs.year;
@@ -290,6 +291,7 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
   const totalPurchasesVal = scopedPurchases.reduce((sum, p) => sum + p.amount, 0);
   const netProfitVal = totalSales - (totalExpensesVal + totalPurchasesVal);
   const outstandingPurchasesVal = scopedPurchases.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0);
+  const profitMarginVal = totalSales > 0 ? Math.round((netProfitVal / totalSales) * 100) : 0;
 
   const expenseCategorySums = {
     salary: scopedExpenses.filter((e) => e.category === "salary").reduce((sum, e) => sum + e.amount, 0),
@@ -675,8 +677,8 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
 
   return (
     <div className="space-y-6 relative">
-      {/* Personalized Greeting */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Personalized Greeting & Sub-Section Switcher */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold font-display">
             Welcome back, <span className="text-accent">
@@ -687,176 +689,45 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
           </h1>
           <p className="text-muted text-sm mt-1">
             {user?.role === "admin"
-              ? "Here's what is happening across KTM DECOR today."
+              ? overviewSubTab === "general"
+                ? "Here's what is happening across KTM DECOR today."
+                : "Inspecting monthly financial performance and records."
               : "Review your pending items and get started on today's tasks."}
           </p>
         </div>
+
+        {/* Admin Sub-Section Switcher: General Overview vs Monthly Data */}
+        {user?.role === "admin" && (
+          <div className="flex items-center gap-1.5 p-1.5 bg-card border border-border/80 rounded-2xl shadow-xs self-start md:self-auto">
+            <button
+              onClick={() => setOverviewSubTab("general")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                overviewSubTab === "general"
+                  ? "bg-foreground text-background shadow-xs"
+                  : "text-muted hover:text-foreground hover:bg-muted/20"
+              }`}
+            >
+              <LayoutDashboard size={15} />
+              <span>General Overview</span>
+            </button>
+            <button
+              onClick={() => setOverviewSubTab("monthly")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                overviewSubTab === "monthly"
+                  ? "bg-foreground text-background shadow-xs"
+                  : "text-muted hover:text-foreground hover:bg-muted/20"
+              }`}
+            >
+              <Calendar size={15} />
+              <span>Monthly Data</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ─── BS MONTH & YEAR SELECTOR / NAVIGATION BAR ─── */}
-      {user?.role === "admin" && (
-        <div className="space-y-3">
-          <div className="bg-card border border-border/80 rounded-[28px] p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            {/* Left Side: Active Period Status */}
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center text-black shadow-xs shrink-0"
-                style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
-              >
-                <Calendar size={20} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-muted">
-                    {viewMode === "all_time" ? "Overall Records" : "Financial Period"}
-                  </span>
-                  {isCurrentMonth ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/25">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      Live Current Month
-                    </span>
-                  ) : isLastMonth ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                      Previous Month Record
-                    </span>
-                  ) : viewMode === "monthly" ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                      Historical Record
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25">
-                      All-Time Aggregate
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-base sm:text-lg font-bold text-foreground">
-                  {viewMode === "all_time"
-                    ? "All-Time Lifetime Overview"
-                    : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} (${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.nepaliName}) ${overviewYear} BS`}
-                </h2>
-              </div>
-            </div>
-
-            {/* Right Side: Quick Filters & Month Selectors */}
-            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-              <button
-                onClick={handleGoToCurrentMonth}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                  isCurrentMonth
-                    ? "bg-accent/10 border-accent/30 text-accent shadow-2xs"
-                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
-                }`}
-              >
-                <span>Current Month ({NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.short})</span>
-              </button>
-
-              <button
-                onClick={handleGoToLastMonth}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                  isLastMonth
-                    ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-2xs"
-                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
-                }`}
-              >
-                <History size={13} />
-                <span>Last Month ({NEPALI_MONTHS.find((m) => m.value === lastBsMonth)?.short})</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode(viewMode === "all_time" ? "monthly" : "all_time")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                  viewMode === "all_time"
-                    ? "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-2xs"
-                    : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
-                }`}
-              >
-                <span>All-Time</span>
-              </button>
-
-              {/* Month / Year Stepper Dropdowns */}
-              {viewMode === "monthly" && (
-                <div className="flex items-center gap-1 bg-muted/20 border border-border/70 p-1 rounded-xl">
-                  <button
-                    onClick={handlePrevMonth}
-                    className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
-                    title="Previous Month"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-
-                  <select
-                    value={overviewMonth}
-                    onChange={(e) => {
-                      setViewMode("monthly");
-                      setOverviewMonth(Number(e.target.value));
-                    }}
-                    className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
-                  >
-                    {NEPALI_MONTHS.map((m) => (
-                      <option key={m.value} value={m.value} className="bg-card">
-                        {m.name} ({m.nepaliName})
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={overviewYear}
-                    onChange={(e) => {
-                      setViewMode("monthly");
-                      setOverviewYear(Number(e.target.value));
-                    }}
-                    className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
-                  >
-                    {NEPALI_YEARS.map((y) => (
-                      <option key={y} value={y} className="bg-card">
-                        {y} BS
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={handleNextMonth}
-                    className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
-                    title="Next Month"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Historical Notification Banner */}
-          {!isCurrentMonth && (
-            <div className="flex items-center justify-between p-3.5 px-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
-              <div className="flex items-center gap-2">
-                <History size={16} className="text-amber-500 shrink-0" />
-                <span>
-                  You are currently inspecting historical records for{" "}
-                  <strong>
-                    {viewMode === "all_time"
-                      ? "All-Time Lifetime Overview"
-                      : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}
-                  </strong>
-                  . Live transactions are recorded in{" "}
-                  <strong>
-                    {NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.name} {currentBs.year} BS
-                  </strong>
-                  .
-                </span>
-              </div>
-              <button
-                onClick={handleGoToCurrentMonth}
-                className="underline font-bold hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer shrink-0 ml-3"
-              >
-                Return to Live Month &rarr;
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── PINNED / HIGH PRIORITY SECTION ─── */}
+      {overviewSubTab === "general" ? (
+        <>
+          {/* ─── PINNED / HIGH PRIORITY SECTION ─── */}
       {pinnedTasks.length > 0 && (
         <div className="border border-red-500/20 bg-red-500/5 dark:bg-red-500/10 rounded-lg p-4 animate-pulse-dots">
           <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-display font-bold text-sm mb-3">
@@ -1129,607 +1000,6 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
               </div>
               {renderMiniBarChart([4, 5, 3, 6, 4, campaigns.length], "fill-blue-500/80 hover:fill-blue-500 transition-colors")}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* FINANCIAL OVERVIEW CARD SECTION */}
-      {user?.role === "admin" && (
-        <div className="space-y-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-            {/* Net Operating Profit Card (Signature Card) */}
-            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Net Operating Profit</span>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                      netProfitVal >= 0
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
-                        : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
-                    }`}
-                  >
-                    {netProfitVal >= 0 ? "Surplus" : "Deficit"}
-                  </span>
-                </div>
-                <div className="mb-3">
-                  <h4
-                    className={`text-3xl sm:text-4xl font-semibold font-display leading-none ${
-                      netProfitVal >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    Rs. {netProfitVal.toLocaleString()}
-                  </h4>
-                </div>
-                <div className="space-y-1.5 text-[11px] font-medium text-muted">
-                  <div className="flex justify-between items-center">
-                    <span>Revenue:</span>
-                    <span className="font-bold text-foreground">Rs. {totalSales.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Expenses:</span>
-                    <span className="font-bold text-foreground">Rs. {totalExpensesVal.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Purchases:</span>
-                    <span className="font-bold text-foreground">Rs. {totalPurchasesVal.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => handlePreviewStatement("all")}
-                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
-              >
-                <span>Preview Statement</span>
-                <span>&rarr;</span>
-              </button>
-            </div>
-
-            {/* Expenses Overview Card (Porcelain White Card) */}
-            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Expenses Summary</span>
-                  <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
-                    Outflows
-                  </span>
-                </div>
-                <div className="mb-3">
-                  <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
-                    Rs. {totalExpensesVal.toLocaleString()}
-                  </h4>
-                  <span className="text-xs text-muted font-medium mt-1 block">Total operating expenditures</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-medium text-muted">
-                  <div className="flex justify-between">
-                    <span>Salary:</span>
-                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.salary.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Rent:</span>
-                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.rent.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Travel:</span>
-                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.travel.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Food:</span>
-                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.food.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setCurrentTab("expenses")}
-                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
-              >
-                <span>View Expense Log</span>
-                <span>&rarr;</span>
-              </button>
-            </div>
-
-            {/* Purchases Tracker Card (Porcelain White Card) */}
-            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Purchases Tracker</span>
-                  <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
-                    {outstandingPurchasesVal > 0 ? "Pending Dues" : "Settled"}
-                  </span>
-                </div>
-                <div className="mb-3">
-                  <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
-                    Rs. {totalPurchasesVal.toLocaleString()}
-                  </h4>
-                  {outstandingPurchasesVal > 0 ? (
-                    <span className="text-xs text-red-500 font-bold mt-1 block">Rs. {outstandingPurchasesVal.toLocaleString()} pending dues</span>
-                  ) : (
-                    <span className="text-xs text-muted font-medium mt-1 block">All vendor bills settled</span>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] text-muted uppercase font-bold tracking-wider block">Recent Invoices</span>
-                  {purchases.slice(0, 2).map((p) => (
-                    <div key={p._id} className="flex justify-between items-center text-[11px] py-0.5">
-                      <span className="truncate max-w-[130px] font-medium text-foreground">{p.supplier}</span>
-                      <span className="text-foreground font-bold">Rs. {p.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
-                  {purchases.length === 0 && (
-                    <span className="text-[11px] text-muted italic">No purchases logged</span>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => setCurrentTab("purchase")}
-                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
-              >
-                <span>View Purchases Tracker</span>
-                <span>&rarr;</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ─── UNIFIED MONTHLY FINANCIAL LEDGER (SALES, EXPENSES & PURCHASES) ─── */}
-          <div className="bg-card border border-border/80 rounded-[32px] shadow-sm p-6 sm:p-8 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="p-2 text-white rounded-xl shadow-xs"
-                    style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
-                  >
-                    <TrendingUp size={18} />
-                  </div>
-                  <h3 className="font-bold text-base font-display text-foreground">
-                    Monthly Financial Ledger
-                  </h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-accent font-bold">
-                    {viewMode === "all_time"
-                      ? "All-Time"
-                      : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}
-                  </span>
-                </div>
-                <p className="text-xs text-muted mt-1">
-                  Unified monthly inflow and outflow ledger combining Sales, Operating Expenses, and Purchases.
-                </p>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-1.5 bg-muted/20 border border-border/70 p-1 rounded-xl shrink-0 self-start sm:self-auto">
-                <button
-                  onClick={() => setLedgerFilter("all")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    ledgerFilter === "all"
-                      ? "bg-card text-foreground shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  All ({monthlyTransactions.length})
-                </button>
-                <button
-                  onClick={() => setLedgerFilter("sale")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    ledgerFilter === "sale"
-                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Sales ({monthlyTransactions.filter((t) => t.type === "sale").length})
-                </button>
-                <button
-                  onClick={() => setLedgerFilter("expense")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    ledgerFilter === "expense"
-                      ? "bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/25 shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Expenses ({monthlyTransactions.filter((t) => t.type === "expense").length})
-                </button>
-                <button
-                  onClick={() => setLedgerFilter("purchase")}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    ledgerFilter === "purchase"
-                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Purchases ({monthlyTransactions.filter((t) => t.type === "purchase").length})
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Metrics Bar for the Selected Period */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 p-4 rounded-2xl bg-muted/15 border border-border/60">
-              <div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Inflow (Sales)</span>
-                <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                  + Rs. {totalSales.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Operating Expenses</span>
-                <span className="text-base sm:text-lg font-black text-red-600 dark:text-red-400 mt-0.5 block">
-                  - Rs. {totalExpensesVal.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Raw Material Purchases</span>
-                <span className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5 block">
-                  - Rs. {totalPurchasesVal.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Net Period Balance</span>
-                <span
-                  className={`text-base sm:text-lg font-black mt-0.5 block ${
-                    netProfitVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  {netProfitVal >= 0 ? "+" : ""} Rs. {netProfitVal.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Transactions Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-border/70 text-[10px] font-bold uppercase tracking-wider text-muted">
-                    <th className="py-2.5 px-3">Date (BS)</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3">Description / Item</th>
-                    <th className="py-2.5 px-3">Client / Vendor</th>
-                    <th className="py-2.5 px-3">Method / Category</th>
-                    <th className="py-2.5 px-3 text-right">Amount (NPR)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50 text-xs">
-                  {monthlyTransactions
-                    .filter((t) => ledgerFilter === "all" || t.type === ledgerFilter)
-                    .map((item) => (
-                      <tr key={item.id} className="hover:bg-muted/15 transition-colors">
-                        <td className="py-2.5 px-3 font-semibold text-muted whitespace-nowrap">
-                          {item.bsDate}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          {item.type === "sale" ? (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-                              Sale
-                            </span>
-                          ) : item.type === "expense" ? (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
-                              Expense
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                              Purchase
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 font-bold text-foreground">
-                          {item.title}
-                        </td>
-                        <td className="py-2.5 px-3 text-muted">
-                          {item.party}
-                        </td>
-                        <td className="py-2.5 px-3 text-muted capitalize">
-                          {item.categoryOrMethod}
-                        </td>
-                        <td
-                          className={`py-2.5 px-3 font-bold text-right whitespace-nowrap ${
-                            item.isInflow
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-foreground"
-                          }`}
-                        >
-                          {item.isInflow ? "+" : "-"} Rs. {item.amount.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-
-                  {monthlyTransactions.filter((t) => ledgerFilter === "all" || t.type === ledgerFilter).length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-muted">
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <Clock size={24} className="text-muted/60" />
-                          <p className="font-bold text-xs">
-                            No {ledgerFilter !== "all" ? ledgerFilter : "financial"} records found for{" "}
-                            {viewMode === "all_time"
-                              ? "all-time"
-                              : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}.
-                          </p>
-                          <p className="text-[11px] text-muted/80">
-                            {isCurrentMonth
-                              ? "As new sales, expenses, and purchases are entered this month, they will automatically appear here."
-                              : "You can switch months using the selector at the top to inspect other periods."}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Reports & Statement Downloads */}
-          <div className="bg-card border border-border/80 rounded-[32px] shadow-sm p-6 sm:p-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-4 mb-4 gap-4">
-              <div>
-                <h3 className="font-bold text-base font-display flex items-center gap-2">
-                  <FileText className="text-accent" size={20} />
-                  Financial Statements & Exports
-                </h3>
-                <p className="text-xs text-muted mt-1">
-                  Generate and download monthly CSV statements or inventory CSV reports at any time.
-                </p>
-              </div>
-
-              {/* Date Filters (Nepali BS) & PDF Preview */}
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1">Nepali Month</span>
-                  <select
-                    value={exportMonth}
-                    onChange={(e) => setExportMonth(e.target.value)}
-                    className="bg-card border border-border text-foreground text-xs rounded px-3 py-1.5 focus:outline-none focus:border-accent font-semibold cursor-pointer"
-                  >
-                    <option value="all">All Time (सम्पूर्ण)</option>
-                    {NEPALI_MONTHS.map((m) => (
-                      <option key={m.value} value={m.value.toString()}>
-                        {m.name} ({m.nepaliName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1">Nepali Year (BS)</span>
-                  <select
-                    value={exportYear}
-                    onChange={(e) => setExportYear(e.target.value)}
-                    className="bg-card border border-border text-foreground text-xs rounded px-3 py-1.5 focus:outline-none focus:border-accent font-semibold cursor-pointer"
-                  >
-                    {NEPALI_YEARS.map((y) => (
-                      <option key={y} value={y.toString()}>
-                        {y} BS
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={() => handlePreviewStatement("all")}
-                  style={{
-                    background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer hover:opacity-95"
-                  title="Open printable statement preview modal"
-                >
-                  <Printer size={14} />
-                  <span>Preview / Print PDF</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Combined Statement (Highlighted with Gradient Glow) */}
-              <div className="p-5 rounded-2xl border-2 border-orange-400/50 bg-gradient-to-b from-orange-500/[0.06] to-card hover:shadow-md transition-all flex flex-col items-center justify-between text-center group">
-                <div className="flex flex-col items-center">
-                  <div
-                    className="p-2.5 rounded-xl shadow-xs mb-2 group-hover:scale-105 transition-transform text-black"
-                    style={{
-                      background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)",
-                    }}
-                  >
-                    <FileText size={18} />
-                  </div>
-                  <span className="text-xs font-bold text-foreground">Combined Statement</span>
-                  <span className="text-[10px] text-muted mt-0.5">Sales, expenses & procurement</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-3 w-full">
-                  <button
-                    onClick={() => handlePreviewStatement("all")}
-                    style={{
-                      background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)",
-                    }}
-                    className="flex-1 py-1.5 px-2.5 rounded-xl text-black hover:opacity-95 text-[11px] font-bold transition-all flex items-center justify-center gap-1 shadow-xs"
-                  >
-                    <Eye size={12} />
-                    <span>PDF</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport("all")}
-                    disabled={exportingType !== null}
-                    className="py-1.5 px-2.5 rounded-xl border border-border bg-[#FDF3E9] text-[#18181B] hover:bg-[#FEEFE2] text-[11px] font-semibold transition-all shadow-xs"
-                    title="Download CSV"
-                  >
-                    {exportingType === "all" ? "..." : "CSV"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sales Only */}
-              <div className="p-5 rounded-2xl border border-border/80 bg-card hover:border-blue-500 hover:shadow-md transition-all flex flex-col items-center justify-between text-center group">
-                <div className="flex flex-col items-center">
-                  <div
-                    style={{ background: "linear-gradient(135deg, #60A5FA 0%, #3B82F6 50%, #1D4ED8 100%)" }}
-                    className="p-2.5 text-white rounded-xl shadow-md shadow-blue-500/20 mb-2 group-hover:scale-105 transition-transform"
-                  >
-                    <TrendingUp size={18} />
-                  </div>
-                  <span className="text-xs font-bold text-foreground">Sales Only</span>
-                  <span className="text-[10px] text-muted mt-0.5">Revenue ledger & invoices</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-3 w-full">
-                  <button
-                    onClick={() => handlePreviewStatement("sales")}
-                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 text-[11px] font-semibold transition-all flex items-center justify-center gap-1"
-                  >
-                    <Eye size={12} />
-                    <span>PDF</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport("sales")}
-                    disabled={exportingType !== null}
-                    className="py-1.5 px-2.5 rounded-xl border border-border bg-background hover:bg-blue-500/10 text-[11px] font-semibold text-foreground transition-all"
-                    title="Download CSV"
-                  >
-                    {exportingType === "sales" ? "..." : "CSV"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Expenses Only */}
-              <div className="p-5 rounded-2xl border border-border/80 bg-card hover:border-red-500 hover:shadow-md transition-all flex flex-col items-center justify-between text-center group">
-                <div className="flex flex-col items-center">
-                  <div
-                    style={{ background: "linear-gradient(135deg, #F87171 0%, #EF4444 50%, #DC2626 100%)" }}
-                    className="p-2.5 text-white rounded-xl shadow-md shadow-red-500/20 mb-2 group-hover:scale-105 transition-transform"
-                  >
-                    <DollarSign size={18} />
-                  </div>
-                  <span className="text-xs font-bold text-foreground">Expenses Only</span>
-                  <span className="text-[10px] text-muted mt-0.5">Salaries, rent & utilities</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-3 w-full">
-                  <button
-                    onClick={() => handlePreviewStatement("expenses")}
-                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 text-[11px] font-semibold transition-all flex items-center justify-center gap-1"
-                  >
-                    <Eye size={12} />
-                    <span>PDF</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport("expenses")}
-                    disabled={exportingType !== null}
-                    className="py-1.5 px-2.5 rounded-xl border border-border bg-background hover:bg-red-500/10 text-[11px] font-semibold text-foreground transition-all"
-                    title="Download CSV"
-                  >
-                    {exportingType === "expenses" ? "..." : "CSV"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Purchases Only */}
-              <div className="p-5 rounded-2xl border border-border/80 bg-card hover:border-amber-500 hover:shadow-md transition-all flex flex-col items-center justify-between text-center group">
-                <div className="flex flex-col items-center">
-                  <div
-                    style={{ background: "linear-gradient(135deg, #FBBF24 0%, #F59E0B 50%, #D97706 100%)" }}
-                    className="p-2.5 text-white rounded-xl shadow-md shadow-amber-500/20 mb-2 group-hover:scale-105 transition-transform"
-                  >
-                    <Briefcase size={18} />
-                  </div>
-                  <span className="text-xs font-bold text-foreground">Purchases Only</span>
-                  <span className="text-[10px] text-muted mt-0.5">Raw materials & procurement</span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-3 w-full">
-                  <button
-                    onClick={() => handlePreviewStatement("purchases")}
-                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 text-[11px] font-semibold transition-all flex items-center justify-center gap-1"
-                  >
-                    <Eye size={12} />
-                    <span>PDF</span>
-                  </button>
-                  <button
-                    onClick={() => handleExport("purchases")}
-                    disabled={exportingType !== null}
-                    className="py-1.5 px-2.5 rounded-xl border border-border bg-background hover:bg-amber-500/10 text-[11px] font-semibold text-foreground transition-all"
-                    title="Download CSV"
-                  >
-                    {exportingType === "purchases" ? "..." : "CSV"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Inventory Catalog */}
-              <div className="p-5 rounded-2xl border border-border/80 bg-card hover:border-emerald-500 hover:shadow-md transition-all flex flex-col items-center justify-between text-center group sm:col-span-2 lg:col-span-1">
-                <div className="flex flex-col items-center">
-                  <div
-                    style={{ background: "linear-gradient(135deg, #34D399 0%, #10B981 50%, #059669 100%)" }}
-                    className="p-2.5 text-white rounded-xl shadow-md shadow-emerald-500/20 mb-2 group-hover:scale-105 transition-transform"
-                  >
-                    <Package size={18} />
-                  </div>
-                  <span className="text-xs font-bold text-foreground">Inventory Catalog</span>
-                  <span className="text-[10px] text-muted mt-0.5">Raw materials & stocks</span>
-                </div>
-                <button
-                  onClick={() => handleExport("inventory")}
-                  disabled={exportingType !== null}
-                  className="w-full mt-3 py-1.5 px-2.5 rounded-xl border border-border bg-background hover:bg-emerald-500/10 text-[11px] font-semibold text-foreground transition-all shadow-xs"
-                >
-                  {exportingType === "inventory" ? "Exporting..." : "Export CSV"}
-                </button>
-              </div>
-            </div>
-
-            {/* Archived Monthly Combined Statements (Senior UI/UX Porcelain Card) */}
-            {user?.role === "admin" && statementArchives.filter((a) => a.type === "all").length > 0 && (
-              <div className="mt-8 border-t border-border/80 pt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="p-2 rounded-xl text-black shadow-xs shrink-0"
-                      style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
-                    >
-                      <Calendar size={16} />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                        Archived Monthly Combined Statements
-                      </h4>
-                      <p className="text-[11px] text-muted">Permanent historical records and downloadable monthly statement archives</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 self-start sm:self-auto">
-                    {statementArchives.filter((a) => a.type === "all").length} Records Saved
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                  {statementArchives
-                    .filter((a) => a.type === "all")
-                    .map((archive) => (
-                      <div
-                        key={archive._id}
-                        className="flex items-center justify-between p-4 rounded-2xl border border-border/80 bg-background/50 hover:bg-background hover:border-orange-400/40 hover:shadow-md transition-all group"
-                      >
-                        <button
-                          onClick={() => handlePreviewArchive(archive._id)}
-                          className="flex items-center gap-3 min-w-0 text-left flex-1 cursor-pointer"
-                          title="Preview / Print PDF"
-                        >
-                          <div
-                            className="p-2.5 rounded-xl text-black shadow-xs group-hover:scale-105 transition-transform shrink-0"
-                            style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
-                          >
-                            <FileText size={15} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-foreground truncate group-hover:text-accent transition-colors">
-                              Combined Statement
-                            </p>
-                            <p className="text-[11px] text-muted font-medium mt-0.5">
-                              {formatArchiveStatementLabel(archive)}
-                            </p>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => downloadArchive(archive._id, archive.filename)}
-                          className="p-2 text-muted hover:text-black hover:bg-orange-500/10 rounded-xl transition-colors ml-2 cursor-pointer shrink-0"
-                          title="Download CSV file"
-                        >
-                          <Download size={15} />
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2071,6 +1341,451 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
               completedTasks={completedTasks}
               title="Revenue Over Time"
             />
+          )}
+        </div>
+      )}
+        </>
+      ) : (
+        /* ─── DEDICATED MONTHLY DATA SUB-SECTION ─── */
+        <div className="space-y-6 animate-fade-in">
+          {/* ─── BS MONTH & YEAR SELECTOR / NAVIGATION BAR ─── */}
+          <div className="space-y-3">
+            <div className="bg-card border border-border/80 rounded-[28px] p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              {/* Left Side: Active Period Status */}
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center text-black shadow-xs shrink-0"
+                  style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
+                >
+                  <Calendar size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-muted">
+                      {viewMode === "all_time" ? "Overall Records" : "Financial Period"}
+                    </span>
+                    {isCurrentMonth ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/25">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                        Live Current Month
+                      </span>
+                    ) : isLastMonth ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                        Previous Month Record
+                      </span>
+                    ) : viewMode === "monthly" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+                        Historical Record
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/25">
+                        All-Time Aggregate
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-base sm:text-lg font-bold text-foreground">
+                    {viewMode === "all_time"
+                      ? "All-Time Lifetime Financial Overview"
+                      : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} (${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.nepaliName}) ${overviewYear} BS`}
+                  </h2>
+                </div>
+              </div>
+
+              {/* Right Side: Quick Filters & Month Selectors */}
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                <button
+                  onClick={handleGoToCurrentMonth}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                    isCurrentMonth
+                      ? "bg-accent/10 border-accent/30 text-accent shadow-2xs"
+                      : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                  }`}
+                >
+                  <span>Current Month ({NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.short})</span>
+                </button>
+
+                <button
+                  onClick={handleGoToLastMonth}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                    isLastMonth
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-2xs"
+                      : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                  }`}
+                >
+                  <History size={13} />
+                  <span>Last Month ({NEPALI_MONTHS.find((m) => m.value === lastBsMonth)?.short})</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode(viewMode === "all_time" ? "monthly" : "all_time")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                    viewMode === "all_time"
+                      ? "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 shadow-2xs"
+                      : "border-border/70 hover:bg-muted/20 text-muted hover:text-foreground"
+                  }`}
+                >
+                  <span>All-Time</span>
+                </button>
+
+                {/* Month / Year Stepper Dropdowns */}
+                {viewMode === "monthly" && (
+                  <div className="flex items-center gap-1 bg-muted/20 border border-border/70 p-1 rounded-xl">
+                    <button
+                      onClick={handlePrevMonth}
+                      className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
+                      title="Previous Month"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+
+                    <select
+                      value={overviewMonth}
+                      onChange={(e) => {
+                        setViewMode("monthly");
+                        setOverviewMonth(Number(e.target.value));
+                      }}
+                      className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
+                    >
+                      {NEPALI_MONTHS.map((m) => (
+                        <option key={m.value} value={m.value} className="bg-card">
+                          {m.name} ({m.nepaliName})
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={overviewYear}
+                      onChange={(e) => {
+                        setViewMode("monthly");
+                        setOverviewYear(Number(e.target.value));
+                      }}
+                      className="px-2.5 py-1 bg-card rounded-lg text-xs font-bold text-foreground border border-border/60 cursor-pointer focus:outline-none shadow-2xs"
+                    >
+                      {NEPALI_YEARS.map((y) => (
+                        <option key={y} value={y} className="bg-card">
+                          {y} BS
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={handleNextMonth}
+                      className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-foreground transition-all cursor-pointer"
+                      title="Next Month"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Historical Notification Banner */}
+            {!isCurrentMonth && (
+              <div className="flex items-center justify-between p-3.5 px-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
+                <div className="flex items-center gap-2">
+                  <History size={16} className="text-amber-500 shrink-0" />
+                  <span>
+                    You are currently inspecting historical records for{" "}
+                    <strong>
+                      {viewMode === "all_time"
+                        ? "All-Time Lifetime Overview"
+                        : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} ${overviewYear} BS`}
+                    </strong>
+                    . Live transactions are recorded in{" "}
+                    <strong>
+                      {NEPALI_MONTHS.find((m) => m.value === currentBs.month)?.name} {currentBs.year} BS
+                    </strong>
+                    .
+                  </span>
+                </div>
+                <button
+                  onClick={handleGoToCurrentMonth}
+                  className="underline font-bold hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer shrink-0 ml-3"
+                >
+                  Return to Live Month &rarr;
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ─── 4 BIG CARDS: ONLY SALES, EXPENSES, PURCHASES & NET PROFIT ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+            {/* 1. SALES CARD (Signature Sunset Gradient Hero Card) */}
+            <div
+              className="relative rounded-[32px] p-6 sm:p-7 shadow-xl shadow-orange-500/10 overflow-hidden flex flex-col justify-between transition-all hover:scale-[1.01] group border border-orange-500/20 min-h-[250px]"
+              style={{
+                background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
+              }}
+            >
+              <div>
+                {/* Header Badge with White Dot as in reference screenshot */}
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-white/25 backdrop-blur-md text-black border border-black/15 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-white shadow-xs shrink-0" />
+                    Sales: Rs. {totalSales.toLocaleString()}
+                  </span>
+                  <div className="p-2.5 bg-black text-white rounded-2xl shadow-md shrink-0 group-hover:rotate-6 transition-transform">
+                    <DollarSign size={20} />
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold text-black/75 uppercase tracking-wider block">
+                  Total Sales (Inflow)
+                </span>
+                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-black leading-none mt-2">
+                  Rs. {totalSales.toLocaleString()}
+                </h3>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-black/15 flex items-center justify-between">
+                <span className="text-xs text-black/80 font-semibold">
+                  {viewMode === "all_time" ? "Lifetime Sales" : `${NEPALI_MONTHS.find((m) => m.value === overviewMonth)?.name} Sales`}
+                </span>
+                <span className="text-[11px] font-bold text-black/75 bg-black/10 px-2.5 py-0.5 rounded-full">
+                  Excl. delivery/fitting
+                </span>
+              </div>
+            </div>
+
+            {/* 2. EXPENSES CARD (Crisp Porcelain White Card with Orange Accent) */}
+            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
+              <div>
+                {/* Header Badge with Orange Dot as in reference screenshot */}
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
+                    Expenses: Rs. {totalExpensesVal.toLocaleString()}
+                  </span>
+                  <div
+                    style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shadow-orange-500/20 shrink-0 group-hover:rotate-6 transition-transform"
+                  >
+                    <ArrowUpRight size={20} />
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
+                  Total Operating Expenses
+                </span>
+                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-foreground leading-none mt-2">
+                  Rs. {totalExpensesVal.toLocaleString()}
+                </h3>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
+                <span className="text-xs text-muted font-medium">
+                  {scopedExpenses.length} expense logs
+                </span>
+                <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2.5 py-0.5 rounded-full border border-orange-500/20">
+                  Salaries, rent & bills
+                </span>
+              </div>
+            </div>
+
+            {/* 3. PURCHASES CARD (Crisp Porcelain White Card with Amber Accent) */}
+            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
+              <div>
+                {/* Header Badge with Amber Dot as in reference screenshot */}
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                    Purchases: Rs. {totalPurchasesVal.toLocaleString()}
+                  </span>
+                  <div
+                    style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shadow-amber-500/20 shrink-0 group-hover:rotate-6 transition-transform"
+                  >
+                    <Briefcase size={20} />
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
+                  Raw Material Purchases
+                </span>
+                <h3 className="text-3xl sm:text-4xl font-extrabold font-display text-foreground leading-none mt-2">
+                  Rs. {totalPurchasesVal.toLocaleString()}
+                </h3>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
+                <span className="text-xs text-muted font-medium">
+                  {scopedPurchases.length} invoices
+                </span>
+                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                  {outstandingPurchasesVal > 0 ? `Rs. ${outstandingPurchasesVal.toLocaleString()} Due` : "Materials"}
+                </span>
+              </div>
+            </div>
+
+            {/* 4. NET PROFIT CARD (Signature Emerald Porcelain Card) */}
+            <div className="bg-card border border-border/80 rounded-[32px] shadow-sm hover:shadow-md transition-all p-6 sm:p-7 flex flex-col justify-between group min-h-[250px]">
+              <div>
+                {/* Header Badge with Green Dot as in reference screenshot */}
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black shadow-2xs border ${
+                    netProfitVal >= 0
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25"
+                      : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25"
+                  }`}>
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${netProfitVal >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+                    Net Profit: Rs. {netProfitVal.toLocaleString()}
+                  </span>
+                  <div
+                    style={{
+                      background: netProfitVal >= 0
+                        ? "linear-gradient(135deg, #10B981 0%, #059669 100%)"
+                        : "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+                    }}
+                    className="p-2.5 text-white rounded-2xl shadow-md shrink-0 group-hover:rotate-6 transition-transform"
+                  >
+                    <TrendingUp size={20} />
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold text-muted uppercase tracking-wider block">
+                  Net Operating Profit
+                </span>
+                <h3
+                  className={`text-3xl sm:text-4xl font-extrabold font-display leading-none mt-2 ${
+                    netProfitVal >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  Rs. {netProfitVal.toLocaleString()}
+                </h3>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between">
+                <span className="text-xs text-muted font-medium">
+                  {profitMarginVal}% margin
+                </span>
+                <span
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    netProfitVal >= 0
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
+                      : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25"
+                  }`}
+                >
+                  {netProfitVal >= 0 ? "Operating Surplus" : "Operating Deficit"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* NET OPERATING BALANCE EQUATION BANNER */}
+          <div className="bg-card border border-border/80 rounded-[28px] p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold">
+              <span className="px-3 py-1.5 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/25">
+                Sales: Rs. {totalSales.toLocaleString()}
+              </span>
+              <span className="text-muted font-black">−</span>
+              <span className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
+                Expenses: Rs. {totalExpensesVal.toLocaleString()}
+              </span>
+              <span className="text-muted font-black">−</span>
+              <span className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                Purchases: Rs. {totalPurchasesVal.toLocaleString()}
+              </span>
+              <span className="text-muted font-black">=</span>
+              <span
+                className={`px-3 py-1.5 rounded-xl border ${
+                  netProfitVal >= 0
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                    : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30"
+                }`}
+              >
+                Net Profit: Rs. {netProfitVal.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto">
+              <button
+                onClick={() => handlePreviewStatement("all")}
+                style={{
+                  background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 46%, #DE5E56 100%)",
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 text-black rounded-xl text-xs font-bold transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer hover:opacity-95"
+              >
+                <Printer size={14} />
+                <span>Preview PDF Statement</span>
+              </button>
+              <button
+                onClick={() => handleExport("all")}
+                disabled={exportingType !== null}
+                className="py-2 px-3 rounded-xl border border-border bg-card hover:bg-muted/30 text-xs font-bold text-foreground transition-all flex items-center gap-1 cursor-pointer"
+                title="Download CSV Statement"
+              >
+                <Download size={14} />
+                <span>{exportingType === "all" ? "Exporting..." : "CSV"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Archived Monthly Combined Statements (if any) */}
+          {user?.role === "admin" && statementArchives.filter((a) => a.type === "all").length > 0 && (
+            <div className="bg-card border border-border/80 rounded-[28px] p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2 border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="p-2 rounded-xl text-black shadow-xs shrink-0"
+                    style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
+                  >
+                    <Calendar size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                      Archived Monthly Combined Statements
+                    </h4>
+                    <p className="text-[11px] text-muted">Permanent historical records and downloadable monthly statement archives</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 self-start sm:self-auto">
+                  {statementArchives.filter((a) => a.type === "all").length} Records Saved
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                {statementArchives
+                  .filter((a) => a.type === "all")
+                  .map((archive) => (
+                    <div
+                      key={archive._id}
+                      className="flex items-center justify-between p-4 rounded-2xl border border-border/80 bg-background/50 hover:bg-background hover:border-orange-400/40 hover:shadow-md transition-all group"
+                    >
+                      <button
+                        onClick={() => handlePreviewArchive(archive._id)}
+                        className="flex items-center gap-3 min-w-0 text-left flex-1 cursor-pointer"
+                        title="Preview / Print PDF"
+                      >
+                        <div
+                          className="p-2.5 rounded-xl text-black shadow-xs group-hover:scale-105 transition-transform shrink-0"
+                          style={{ background: "linear-gradient(115deg, #F7BA49 0%, #F08B4E 100%)" }}
+                        >
+                          <FileText size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground truncate group-hover:text-accent transition-colors">
+                            Combined Statement
+                          </p>
+                          <p className="text-[11px] text-muted font-medium mt-0.5">
+                            {formatArchiveStatementLabel(archive)}
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => downloadArchive(archive._id, archive.filename)}
+                        className="p-2 text-muted hover:text-black hover:bg-orange-500/10 rounded-xl transition-colors ml-2 cursor-pointer shrink-0"
+                        title="Download CSV file"
+                      >
+                        <Download size={15} />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
           )}
         </div>
       )}
