@@ -1004,6 +1004,145 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
         </div>
       )}
 
+      {/* FINANCIAL OVERVIEW CARD SECTION */}
+      {user?.role === "admin" && (
+        <div className="space-y-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
+            {/* Net Operating Profit Card (Signature Card) */}
+            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Net Operating Profit</span>
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      netProfitVal >= 0
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                        : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+                    }`}
+                  >
+                    {netProfitVal >= 0 ? "Surplus" : "Deficit"}
+                  </span>
+                </div>
+                <div className="mb-3">
+                  <h4
+                    className={`text-3xl sm:text-4xl font-semibold font-display leading-none ${
+                      netProfitVal >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    Rs. {netProfitVal.toLocaleString()}
+                  </h4>
+                </div>
+                <div className="space-y-1.5 text-[11px] font-medium text-muted">
+                  <div className="flex justify-between items-center">
+                    <span>Revenue:</span>
+                    <span className="font-bold text-foreground">Rs. {totalSales.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Expenses:</span>
+                    <span className="font-bold text-foreground">Rs. {totalExpensesVal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Purchases:</span>
+                    <span className="font-bold text-foreground">Rs. {totalPurchasesVal.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => handlePreviewStatement("all")}
+                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+              >
+                <span>Preview Statement</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+
+            {/* Expenses Overview Card (Porcelain White Card) */}
+            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Expenses Summary</span>
+                  <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
+                    Outflows
+                  </span>
+                </div>
+                <div className="mb-3">
+                  <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
+                    Rs. {totalExpensesVal.toLocaleString()}
+                  </h4>
+                  <span className="text-xs text-muted font-medium mt-1 block">Total operating expenditures</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-medium text-muted">
+                  <div className="flex justify-between">
+                    <span>Salary:</span>
+                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.salary.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rent:</span>
+                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.rent.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Travel:</span>
+                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.travel.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Food:</span>
+                    <span className="font-bold text-foreground">Rs. {expenseCategorySums.food.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setCurrentTab("expenses")}
+                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Expense Log</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+
+            {/* Purchases Tracker Card (Porcelain White Card) */}
+            <div className="bg-card border border-border/80 rounded-[28px] shadow-sm hover:shadow-md transition-all p-6 flex flex-col justify-between min-h-[260px]">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-muted uppercase tracking-wider block">Purchases Tracker</span>
+                  <span className="text-[10px] font-bold bg-neutral-200 dark:bg-neutral-800 text-black dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 px-2.5 py-0.5 rounded-full">
+                    {outstandingPurchasesVal > 0 ? "Pending Dues" : "Settled"}
+                  </span>
+                </div>
+                <div className="mb-3">
+                  <h4 className="text-3xl sm:text-4xl font-semibold font-display text-foreground leading-none">
+                    Rs. {totalPurchasesVal.toLocaleString()}
+                  </h4>
+                  {outstandingPurchasesVal > 0 ? (
+                    <span className="text-xs text-red-500 font-bold mt-1 block">Rs. {outstandingPurchasesVal.toLocaleString()} pending dues</span>
+                  ) : (
+                    <span className="text-xs text-muted font-medium mt-1 block">All vendor bills settled</span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-muted uppercase font-bold tracking-wider block">Recent Invoices</span>
+                  {purchases.slice(0, 2).map((p) => (
+                    <div key={p._id} className="flex justify-between items-center text-[11px] py-0.5">
+                      <span className="truncate max-w-[130px] font-medium text-foreground">{p.supplier}</span>
+                      <span className="text-foreground font-bold">Rs. {p.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {purchases.length === 0 && (
+                    <span className="text-[11px] text-muted italic">No purchases logged</span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setCurrentTab("purchase")}
+                className="text-left text-xs font-bold text-accent hover:text-accent-dark transition-colors mt-2 flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Purchases Tracker</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SECONDARY ROW GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT COLUMN: STAFF LIST (ADMIN) / TODAY'S SCHEDULE (STAFF) */}
