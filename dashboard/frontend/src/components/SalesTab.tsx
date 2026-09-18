@@ -157,9 +157,9 @@ export const SalesTab: React.FC = () => {
         ? (Number(orderObj.price) || 0)
         : s.amount;
 
-    // Prioritize the order collected date (orderDate) chosen by the user when entering the order
-    const effectiveDate = (isOrder && orderObj?.orderDate)
-      ? orderObj.orderDate
+    // Prioritize the order collected date (orderDate) or createdAt chosen by the user when entering the order
+    const effectiveDate = (isOrder && (orderObj?.orderDate || orderObj?.createdAt))
+      ? (orderObj.orderDate || orderObj.createdAt)
       : s.date;
 
     return {

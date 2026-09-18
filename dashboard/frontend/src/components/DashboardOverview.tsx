@@ -258,7 +258,8 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
         ? (s.orderId as any)._id?.toString()
         : s.orderId?.toString();
       const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
-      const effectiveDate = (matchedOrder && matchedOrder.orderDate) ? matchedOrder.orderDate : s.date;
+      const orderObj = matchedOrder || (typeof s.orderId === "object" && s.orderId !== null ? (s.orderId as any) : undefined);
+      const effectiveDate = orderObj?.orderDate || orderObj?.createdAt || s.date;
       return isDateInSelectedPeriod(effectiveDate);
     })
     .reduce((acc, s) => {
@@ -266,12 +267,11 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
         ? (s.orderId as any)._id?.toString()
         : s.orderId?.toString();
       const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
+      const orderObj = matchedOrder || (typeof s.orderId === "object" && s.orderId !== null ? (s.orderId as any) : undefined);
 
-      const pPrice = matchedOrder
-        ? (Number(matchedOrder.price) || 0)
-        : (s.orderId && typeof s.orderId === "object" && "price" in s.orderId)
-          ? (Number((s.orderId as any).price) || 0)
-          : (Number(s.amount) || 0);
+      const pPrice = orderObj?.price !== undefined
+        ? (Number(orderObj.price) || 0)
+        : (Number(s.amount) || 0);
       return acc + pPrice;
     }, 0);
 
@@ -331,11 +331,12 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
         ? (s.orderId as any)._id?.toString()
         : s.orderId?.toString();
       const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
-      const effectiveDate = (matchedOrder && matchedOrder.orderDate) ? matchedOrder.orderDate : s.date;
+      const orderObj = matchedOrder || (typeof s.orderId === "object" && s.orderId !== null ? (s.orderId as any) : undefined);
+      const effectiveDate = orderObj?.orderDate || orderObj?.createdAt || s.date;
 
       if (isDateInSelectedPeriod(effectiveDate)) {
-        const pPrice = matchedOrder
-          ? (Number(matchedOrder.price) || 0)
+        const pPrice = orderObj?.price !== undefined
+          ? (Number(orderObj.price) || 0)
           : (Number(s.amount) || 0);
 
         list.push({
@@ -457,14 +458,14 @@ export const DashboardOverview: React.FC<OverviewProps> = ({
         ? (s.orderId as any)._id?.toString()
         : s.orderId?.toString();
       const matchedOrder = orderIdStr ? ordersMap.get(orderIdStr) : undefined;
-      const pPrice = matchedOrder
-        ? (Number(matchedOrder.price) || 0)
-        : (s.orderId && typeof s.orderId === "object" && "price" in s.orderId)
-          ? (Number((s.orderId as any).price) || 0)
-          : (Number(s.amount) || 0);
+      const orderObj = matchedOrder || (typeof s.orderId === "object" && s.orderId !== null ? (s.orderId as any) : undefined);
+      const effectiveDate = orderObj?.orderDate || orderObj?.createdAt || s.date;
+      const pPrice = orderObj?.price !== undefined
+        ? (Number(orderObj.price) || 0)
+        : (Number(s.amount) || 0);
 
       revenueItems.push({
-        date: new Date(s.date),
+        date: new Date(effectiveDate),
         value: pPrice
       });
     });

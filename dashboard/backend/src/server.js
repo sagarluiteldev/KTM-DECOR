@@ -488,7 +488,7 @@ app.get("/api/bootstrap", protect, async (req, res) => {
 
     // 4. Inject admin-only data (with limits)
     if (userRole === "admin") {
-      promises.sales = Sale.find({}).populate("createdBy", "name role").populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status orderDate").sort({ date: -1 }).limit(500).lean();
+      promises.sales = Sale.find({}).populate("createdBy", "name role").populate("orderId", "customerName price totalPrice deliveryPrice installationPrice stage status orderDate createdAt").sort({ date: -1 }).limit(500).lean();
       promises.expenses = Expense.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(500).lean();
       promises.purchases = Purchase.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(300).lean();
       promises.quotations = Quotation.find({}).populate("createdBy", "name role").sort({ date: -1 }).limit(200).lean();

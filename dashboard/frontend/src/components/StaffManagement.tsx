@@ -2859,7 +2859,7 @@ export const StaffManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-muted mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                <label className="text-xs font-bold text-muted mb-1.5 uppercase tracking-wider flex items-center justify-between">
                   <span>{editingUser ? "Change Password (Optional)" : "Password (Optional)"}</span>
                   {editingUser && <span className="text-[10px] text-muted normal-case font-normal">Leave blank to keep current</span>}
                 </label>
